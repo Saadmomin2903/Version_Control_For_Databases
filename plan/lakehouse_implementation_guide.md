@@ -6,19 +6,20 @@
 ## 📋 TABLE OF CONTENTS
 
 1. [Project Overview](#overview)
-2. [Prerequisites](#prerequisites)
-3. [Phase 1: Infrastructure Setup](#phase1)
-4. [Phase 2: Storage Configuration](#phase2)
-5. [Phase 3: Python Environment](#phase3)
-6. [Phase 4: Bronze Layer](#phase4)
-7. [Phase 5: Silver Layer](#phase5)
-8. [Phase 6: Gold Layer](#phase6)
-9. [Phase 7: Quality Checks](#phase7)
-10. [Phase 8: Orchestration](#phase8)
-11. [Phase 9: Testing](#phase9)
-12. [Phase 10: Production Deployment](#phase10)
-13. [Quick Start Commands](#quickstart)
-14. [Troubleshooting](#troubleshooting)
+2. [Knowledge Prerequisites](#knowledge)
+3. [Prerequisites](#prerequisites)
+4. [Phase 1: Infrastructure Setup](#phase1)
+5. [Phase 2: Storage Configuration](#phase2)
+6. [Phase 3: Python Environment](#phase3)
+7. [Phase 4: Bronze Layer](#phase4)
+8. [Phase 5: Silver Layer](#phase5)
+9. [Phase 6: Gold Layer](#phase6)
+10. [Phase 7: Quality Checks](#phase7)
+11. [Phase 8: Orchestration](#phase8)
+12. [Phase 9: Testing](#phase9)
+13. [Phase 10: Production Deployment](#phase10)
+14. [Quick Start Commands](#quickstart)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -37,6 +38,344 @@ This guide implements a production-ready data lakehouse using:
 - Time-travel queries
 - Data quality gates
 - Complete test coverage
+
+---
+
+## 📚 KNOWLEDGE PREREQUISITES {#knowledge}
+
+Before starting this project, you should understand these concepts. Don't worry if you're not an expert - this guide will teach you as you go, but having a foundation will help significantly.
+
+### 🎯 Essential Concepts (Must Know)
+
+#### 1. **Python Programming**
+**Why**: All scripts are written in Python
+
+**What to Know:**
+- Basic Python syntax (variables, functions, classes)
+- Working with modules and imports
+- File I/O operations
+- Error handling (try/except)
+- Working with dictionaries and lists
+
+**Quick Check:**
+```python
+# Can you understand this?
+import os
+from datetime import datetime
+
+def process_data(file_path):
+    try:
+        with open(file_path, 'r') as f:
+            data = f.read()
+        return data
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        return None
+```
+
+**Learning Resources:**
+- Python.org Tutorial: https://docs.python.org/3/tutorial/
+- Real Python: https://realpython.com/
+- **Time to Learn**: 1-2 weeks if beginner
+
+---
+
+#### 2. **Data Engineering Basics**
+**Why**: This is a data engineering project
+
+**What to Know:**
+- **ETL/ELT**: Extract, Transform, Load processes
+- **Data Pipelines**: Sequential data processing steps
+- **Data Warehouses vs Data Lakes**: Different storage approaches
+- **Data Quality**: Why it matters and how to check it
+
+**Key Concepts:**
+- **Raw Data**: Unprocessed data from source systems
+- **Transformed Data**: Cleaned, validated, and enriched data
+- **Analytics Data**: Aggregated data for reporting
+
+**Learning Resources:**
+- Data Engineering Podcast: https://www.dataengineeringpodcast.com/
+- **Time to Learn**: 1 week of focused reading
+
+---
+
+#### 3. **Medallion Architecture**
+**Why**: This project uses Bronze → Silver → Gold layers
+
+**What to Know:**
+- **Bronze Layer**: Raw, unprocessed data (as-is from source)
+- **Silver Layer**: Cleaned, validated, and enriched data
+- **Gold Layer**: Business-level aggregated data for analytics
+
+**Analogy**: Think of it like refining oil:
+- **Bronze** = Crude oil (raw)
+- **Silver** = Refined oil (cleaned)
+- **Gold** = Gasoline (ready to use)
+
+**Visual Flow:**
+```
+Raw Data → Bronze → Silver → Gold
+  CSV      Raw      Clean    Analytics
+```
+
+**Learning Resources:**
+- Databricks Medallion Architecture: https://www.databricks.com/glossary/medallion-architecture
+- **Time to Learn**: 1-2 hours of reading
+
+---
+
+#### 4. **Docker Basics**
+**Why**: Infrastructure runs in Docker containers
+
+**What to Know:**
+- What Docker containers are
+- Basic Docker commands:
+  - `docker ps` - List running containers
+  - `docker-compose up` - Start services
+  - `docker logs` - View logs
+- Understanding `docker-compose.yml` files
+
+**Key Concepts:**
+- **Container**: Isolated environment running an application
+- **Image**: Template for creating containers
+- **Volume**: Persistent storage for containers
+
+**Learning Resources:**
+- Docker Getting Started: https://docs.docker.com/get-started/
+- Docker Compose Tutorial: https://docs.docker.com/compose/gettingstarted/
+- **Time to Learn**: 2-3 hours hands-on
+
+---
+
+### 🔧 Important Concepts (Should Know)
+
+#### 5. **Object Storage (S3/MinIO)**
+**Why**: Data is stored in object storage
+
+**What to Know:**
+- **Object Storage**: Files stored as objects (not files in folders)
+- **Buckets**: Containers for objects (like folders)
+- **S3 API**: Standard interface for object storage
+- **MinIO**: S3-compatible storage (we use it locally)
+
+**Key Concepts:**
+- Objects have keys (paths) and data
+- Scalable and cost-effective
+- Used by AWS S3, Google Cloud Storage, Azure Blob
+
+**Learning Resources:**
+- AWS S3 Documentation: https://docs.aws.amazon.com/s3/
+- MinIO Quickstart: https://min.io/docs/minio/linux/index.html
+- **Time to Learn**: 1-2 hours
+
+---
+
+#### 6. **DataFrames and Data Processing**
+**Why**: We use Polars (similar to Pandas) for data transformations
+
+**What to Know:**
+- **DataFrame**: Tabular data structure (rows and columns)
+- Basic operations:
+  - Filtering rows
+  - Selecting columns
+  - Grouping and aggregating
+  - Joining tables
+
+**Example:**
+```python
+# Can you understand this?
+df = pl.read_csv("data.csv")
+filtered = df.filter(pl.col("amount") > 100)
+grouped = filtered.group_by("category").agg(pl.sum("amount"))
+```
+
+**Learning Resources:**
+- Polars User Guide: https://pola-rs.github.io/polars-book/
+- Pandas Tutorial (similar concepts): https://pandas.pydata.org/docs/getting_started/
+- **Time to Learn**: 1 week if new to data processing
+
+---
+
+#### 7. **Version Control (Git Concepts)**
+**Why**: Nessie provides Git-like versioning for data
+
+**What to Know:**
+- **Branches**: Separate lines of development
+- **Commits**: Snapshots of state
+- **Merging**: Combining branches
+- **Tags**: Marking important versions
+
+**Key Difference:**
+- **Git**: Versions code
+- **Nessie**: Versions data (same concepts!)
+
+**Learning Resources:**
+- Git Basics: https://git-scm.com/book/en/v2/Getting-Started-Git-Basics
+- **Time to Learn**: 2-3 hours
+
+---
+
+### 🚀 Advanced Concepts (Nice to Know)
+
+#### 8. **Apache Iceberg**
+**Why**: We use Iceberg as the table format
+
+**What to Know:**
+- **Table Format**: How data is organized and stored
+- **ACID Transactions**: Atomic, Consistent, Isolated, Durable
+- **Schema Evolution**: Changing table structure over time
+- **Time Travel**: Querying data at a point in time
+
+**Key Benefits:**
+- Better performance for large datasets
+- Schema evolution without breaking changes
+- Time-travel queries
+
+**Learning Resources:**
+- Iceberg Documentation: https://iceberg.apache.org/docs/
+- **Time to Learn**: 2-3 hours (you'll learn as you build)
+
+---
+
+#### 9. **REST APIs**
+**Why**: Nessie uses REST API for operations
+
+**What to Know:**
+- **HTTP Methods**: GET, POST, PUT, DELETE
+- **JSON**: Data format for API responses
+- **Endpoints**: URLs for different operations
+
+**Example:**
+```python
+# Can you understand this?
+import requests
+response = requests.get("http://localhost:19120/api/v2/config")
+data = response.json()
+```
+
+**Learning Resources:**
+- REST API Tutorial: https://restfulapi.net/
+- **Time to Learn**: 1-2 hours
+
+---
+
+#### 10. **Data Quality**
+**Why**: We implement quality checks
+
+**What to Know:**
+- **Data Validation**: Checking data meets requirements
+- **Null Checks**: Ensuring required fields have values
+- **Uniqueness**: Checking for duplicates
+- **Range Checks**: Validating values are in expected ranges
+
+**Learning Resources:**
+- Data Quality Best Practices: https://www.datacamp.com/tutorial/data-quality
+- **Time to Learn**: 1-2 hours
+
+---
+
+### 📊 Learning Path Recommendation
+
+#### **If You're a Complete Beginner:**
+1. **Week 1**: Learn Python basics (variables, functions, file I/O)
+2. **Week 2**: Learn DataFrames (Pandas or Polars)
+3. **Week 3**: Learn Docker basics
+4. **Week 4**: Read about data engineering concepts
+5. **Then**: Start this project!
+
+#### **If You Know Python:**
+1. **Day 1**: Learn Docker basics (2-3 hours)
+2. **Day 2**: Learn about Medallion Architecture (1 hour)
+3. **Day 3**: Learn Polars basics (2-3 hours)
+4. **Then**: Start this project!
+
+#### **If You're Experienced:**
+1. **1-2 hours**: Review Iceberg and Nessie concepts
+2. **Then**: Start this project!
+
+---
+
+### 🎓 Quick Learning Checklist
+
+Before starting, you should be able to:
+
+- [ ] Write a Python function that reads a CSV file
+- [ ] Understand what a Docker container is
+- [ ] Explain the difference between Bronze, Silver, and Gold layers
+- [ ] Know what a DataFrame is and basic operations
+- [ ] Understand what version control (Git) does
+- [ ] Know what object storage (S3) is
+
+**If you can check 4+ items, you're ready to start!**
+
+---
+
+### 💡 Learning While Building
+
+**Good News**: You don't need to master everything before starting!
+
+This guide is designed to teach you as you build:
+- Each phase explains concepts as you implement them
+- Code examples are well-commented
+- Troubleshooting section helps when stuck
+
+**Strategy:**
+1. **Start with basics**: Learn Python and Docker if needed
+2. **Begin the project**: Follow the guide step-by-step
+3. **Learn as you go**: When you encounter something new, pause and learn it
+4. **Iterate**: Build, test, learn, improve
+
+---
+
+### 📚 Recommended Learning Order
+
+**Before Starting Project:**
+1. ✅ Python basics (if needed)
+2. ✅ Docker basics
+3. ✅ Medallion Architecture concept
+
+**During Project:**
+- Learn Iceberg as you use it
+- Learn Nessie as you use it
+- Learn Polars as you transform data
+
+**After Project:**
+- Deep dive into Iceberg internals
+- Learn advanced Nessie features
+- Optimize for production
+
+---
+
+### 🆘 Where to Get Help
+
+**If You're Stuck:**
+1. **This Guide**: Check troubleshooting section
+2. **Official Docs**: Links provided throughout
+3. **Stack Overflow**: Tag questions with technology name
+4. **Community**: Join Apache Iceberg/Nessie Slack/Discord
+
+**Common Questions:**
+- "I don't understand X concept" → Check learning resources above
+- "Code doesn't work" → Check troubleshooting section
+- "Want to learn more" → Follow links in resources section
+
+---
+
+### ✅ Ready to Start?
+
+**Minimum Requirements:**
+- Basic Python knowledge
+- Understanding of what Docker is
+- Willingness to learn as you go
+
+**Ideal Requirements:**
+- Comfortable with Python
+- Know Docker basics
+- Understand data processing concepts
+- Familiar with data engineering terms
+
+**Remember**: This is a learning project! It's okay to not know everything upfront. The guide will teach you along the way.
 
 ---
 
@@ -584,7 +923,7 @@ def setup_minio():
         # Check if bucket exists
         if client.bucket_exists(S3_BUCKET):
             print(f"✓ Bucket '{S3_BUCKET}' already exists")
-        else:
+else:
             # Create bucket
             client.make_bucket(S3_BUCKET)
             print(f"✓ Created bucket: {S3_BUCKET}")
@@ -653,14 +992,14 @@ def create_branch(branch_name, base_branch="main"):
             headers={"Content-Type": "application/json"},
             timeout=10
         )
-        
-        if response.status_code in [200, 201]:
-            print(f"✓ Created branch: {branch_name}")
+    
+    if response.status_code in [200, 201]:
+        print(f"✓ Created branch: {branch_name}")
             return True
-        elif response.status_code == 409:
+    elif response.status_code == 409:
             print(f"✓ Branch '{branch_name}' already exists")
             return True
-        else:
+    else:
             print(f"✗ Failed to create branch '{branch_name}': {response.status_code}")
             print(f"  Response: {response.text}")
             return False
@@ -672,8 +1011,8 @@ def list_branches():
     """List all Nessie branches"""
     try:
         response = requests.get(f"{NESSIE_URI}/trees", timeout=10)
-        if response.status_code == 200:
-            branches = response.json().get("references", [])
+if response.status_code == 200:
+    branches = response.json().get("references", [])
             return branches
         return []
     except Exception as e:
@@ -953,11 +1292,11 @@ def main():
     print("=" * 60)
     
     # Ensure data/raw directory exists
-    os.makedirs("data/raw", exist_ok=True)
+os.makedirs("data/raw", exist_ok=True)
     
     # Generate orders data
     print("\nGenerating orders data...")
-    orders_df = generate_orders_data(1000)
+orders_df = generate_orders_data(1000)
     orders_path = "data/raw/orders.csv"
     orders_df.write_csv(orders_path)
     print(f"✓ Generated {orders_path}: {len(orders_df):,} records")
@@ -965,7 +1304,7 @@ def main():
     
     # Generate customers data
     print("\nGenerating customers data...")
-    customers_df = generate_customers_data(200)
+customers_df = generate_customers_data(200)
     customers_path = "data/raw/customers.csv"
     customers_df.write_csv(customers_path)
     print(f"✓ Generated {customers_path}: {len(customers_df):,} records")
@@ -2410,8 +2749,8 @@ If problems persist:
 2. **Use predicate pushdown**
    ```python
    # Good: Filter early
-   scan = table.scan(row_filter="year = 2024")
-   
+scan = table.scan(row_filter="year = 2024")
+
    # Bad: Load all then filter
    df = pl.from_arrow(table.scan().to_arrow())
    df = df.filter(pl.col("year") == 2024)
@@ -2420,7 +2759,7 @@ If problems persist:
 3. **Select only needed columns**
    ```python
    # Good: Select specific columns
-   scan = table.scan(selected_fields=("order_id", "total_amount"))
+scan = table.scan(selected_fields=("order_id", "total_amount"))
    
    # Bad: Load all columns
    df = pl.from_arrow(table.scan().to_arrow())
