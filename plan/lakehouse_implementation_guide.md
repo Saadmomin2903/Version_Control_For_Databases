@@ -42,24 +42,158 @@ This guide implements a production-ready data lakehouse using:
 
 ## ✅ PREREQUISITES {#prerequisites}
 
-### Required Software
+### Required Software Installation
+
+#### Step 1: Install Docker Desktop
 ```bash
-# 1. Docker Desktop (latest)
-https://www.docker.com/products/docker-desktop
+# Download and install from:
+# https://www.docker.com/products/docker-desktop
 
-# 2. Python 3.9+
+# Verify installation:
+docker --version
+# Expected: Docker version 24.0.0 or higher
+
+# Start Docker Desktop application
+# Wait for Docker to be running (whale icon in system tray)
+```
+
+#### Step 2: Verify Python Installation
+```bash
+# Check Python version (must be 3.9 or higher)
 python --version
+# OR
+python3 --version
 
-# 3. Git
+# If Python is not installed:
+# macOS: brew install python@3.11
+# Linux: sudo apt-get install python3.9 python3-pip
+# Windows: Download from python.org
+```
+
+#### Step 3: Install Git
+```bash
+# Verify Git installation
 git --version
 
-# 4. Code Editor (VS Code recommended)
+# If not installed:
+# macOS: brew install git
+# Linux: sudo apt-get install git
+# Windows: Download from git-scm.com
+```
+
+#### Step 4: Install curl (for health checks)
+```bash
+# Verify curl installation
+curl --version
+
+# macOS/Linux: Usually pre-installed
+# Windows: Included with Git for Windows
 ```
 
 ### System Requirements
-- 8GB+ RAM (16GB recommended)
-- 50GB free disk space
-- Multi-core CPU (4+ cores)
+- **RAM**: 8GB minimum, 16GB recommended
+- **Disk Space**: 50GB free (for Docker images and data)
+- **CPU**: Multi-core processor (4+ cores recommended)
+- **OS**: macOS 10.15+, Linux (Ubuntu 20.04+), Windows 10/11
+
+### Pre-Setup Verification Checklist
+```bash
+# Run these commands to verify everything is ready:
+docker --version          # ✓ Docker installed
+python --version          # ✓ Python 3.9+
+git --version            # ✓ Git installed
+curl --version           # ✓ curl available
+docker ps                # ✓ Docker daemon running
+```
+
+---
+
+## 🔐 CREDENTIAL MANAGEMENT {#credentials}
+
+**IMPORTANT**: Before starting, decide on your credentials. For production, use strong passwords!
+
+### Step 0.1: Create Environment Variables File
+
+Create `.env` file in project root (this file should NOT be committed to git):
+
+```bash
+# Create .env file
+cat > .env << EOF
+# MinIO Configuration
+MINIO_ROOT_USER=admin
+MINIO_ROOT_PASSWORD=password123
+S3_ENDPOINT=http://localhost:9000
+S3_ACCESS_KEY=admin
+S3_SECRET_KEY=password123
+S3_BUCKET=lakehouse
+
+# Nessie Configuration
+NESSIE_URI=http://localhost:19120/api/v2
+NESSIE_VERSION_STORE_TYPE=INMEMORY
+
+# Project Configuration
+NAMESPACE=ecommerce
+BRONZE_BRANCH=bronze
+SILVER_BRANCH=silver
+GOLD_BRANCH=gold
+EOF
+```
+
+**Security Note**: 
+- For **development**: You can use simple passwords like `password123`
+- For **production**: Generate strong passwords:
+  ```bash
+  # Generate secure password (Linux/Mac)
+  openssl rand -base64 32
+  
+  # Or use a password manager
+  ```
+
+### Step 0.2: Create .gitignore
+
+```bash
+# Create .gitignore to protect sensitive files
+cat > .gitignore << EOF
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data
+data/raw/*.csv
+data/raw/*.parquet
+*.db
+*.sqlite
+
+# Logs
+logs/*.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+EOF
+```
 
 ---
 
@@ -68,15 +202,58 @@ git --version
 ### Step 1.1: Create Project Structure
 
 ```bash
+# Navigate to your workspace
+cd ~/Documents  # or your preferred location
+
 # Create main directory
-mkdir lakehouse-project
+mkdir -p lakehouse-project
 cd lakehouse-project
 
-# Create subdirectories
-mkdir -p {config,data/{raw,bronze,silver,gold},scripts/{bronze,silver,gold,utils},logs,tests,notebooks,orchestration/dags}
+# Create complete directory structure
+mkdir -p config
+mkdir -p data/raw
+mkdir -p data/bronze
+mkdir -p data/silver
+mkdir -p data/gold
+mkdir -p scripts/bronze
+mkdir -p scripts/silver
+mkdir -p scripts/gold
+mkdir -p scripts/utils
+mkdir -p logs
+mkdir -p tests
+mkdir -p notebooks
+mkdir -p orchestration/dags
+
+# Verify structure
+tree -L 2  # If tree is installed
+# OR
+find . -type d -maxdepth 2 | sort
+```
+
+**Expected Output:**
+```
+.
+├── config
+├── data
+│   ├── bronze
+│   ├── gold
+│   ├── raw
+│   └── silver
+├── logs
+├── notebooks
+├── orchestration
+│   └── dags
+├── scripts
+│   ├── bronze
+│   ├── gold
+│   ├── silver
+│   └── utils
+└── tests
 ```
 
 ### Step 1.2: Create docker-compose.yml
+
+Create `docker-compose.yml` in the project root:
 
 ```yaml
 version: '3.8'
@@ -86,11 +263,11 @@ services:
     image: minio/minio:latest
     container_name: lakehouse-minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: password123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-password123}
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
@@ -101,15 +278,17 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+      start_period: 10s
+    restart: unless-stopped
 
   nessie:
     image: projectnessie/nessie:latest
     container_name: lakehouse-nessie
     ports:
-      - "19120:19120"
+      - "${NESSIE_PORT:-19120}:19120"
     environment:
       QUARKUS_HTTP_PORT: 19120
-      NESSIE_VERSION_STORE_TYPE: INMEMORY
+      NESSIE_VERSION_STORE_TYPE: ${NESSIE_VERSION_STORE_TYPE:-INMEMORY}
     networks:
       - lakehouse-network
     healthcheck:
@@ -117,31 +296,116 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
+    restart: unless-stopped
 
 volumes:
   minio-data:
+    driver: local
 
 networks:
   lakehouse-network:
     driver: bridge
 ```
 
+**Key Points:**
+- Uses environment variables from `.env` file (with defaults)
+- Health checks ensure services are ready before use
+- `restart: unless-stopped` keeps services running after reboot
+- Named volumes persist data between container restarts
+
 ### Step 1.3: Start Infrastructure
 
+#### Step 1.3.1: Load Environment Variables and Start Services
+
 ```bash
-# Start services
+# Ensure you're in the project root directory
+cd ~/Documents/lakehouse-project  # Adjust path as needed
+
+# Verify docker-compose.yml exists
+ls -la docker-compose.yml
+
+# Start services in detached mode
 docker-compose up -d
 
-# Verify running
+# Expected output:
+# Creating network "lakehouse-project_lakehouse-network" ... done
+# Creating volume "lakehouse-project_minio-data" ... done
+# Creating lakehouse-minio ... done
+# Creating lakehouse-nessie ... done
+```
+
+#### Step 1.3.2: Verify Services Are Running
+
+```bash
+# Check container status
 docker-compose ps
 
-# Check logs
-docker-compose logs nessie
-docker-compose logs minio
+# Expected output (both should show "Up"):
+# NAME                STATUS          PORTS
+# lakehouse-minio     Up (healthy)    0.0.0.0:9000->9000/tcp, 0.0.0.0:9001->9001/tcp
+# lakehouse-nessie    Up (healthy)    0.0.0.0:19120->19120/tcp
+```
 
-# Test connections
+#### Step 1.3.3: Check Service Logs
+
+```bash
+# Check Nessie logs (should see "started in X.XXXs")
+docker-compose logs nessie | tail -20
+
+# Check MinIO logs (should see "API: http://0.0.0.0:9000")
+docker-compose logs minio | tail -20
+
+# Follow logs in real-time (Ctrl+C to exit)
+docker-compose logs -f
+```
+
+#### Step 1.3.4: Test Service Connectivity
+
+```bash
+# Test Nessie API
 curl http://localhost:19120/api/v2/config
-# Open browser: http://localhost:9001 (login: admin/password123)
+
+# Expected: JSON response with Nessie configuration
+# If you get "Connection refused", wait 10-15 seconds and try again
+
+# Test MinIO health endpoint
+curl http://localhost:9000/minio/health/live
+
+# Expected: Empty response (200 OK)
+```
+
+#### Step 1.3.5: Access MinIO Console
+
+1. **Open browser** and navigate to: `http://localhost:9001`
+2. **Login credentials**:
+   - Username: `admin` (or your MINIO_ROOT_USER from .env)
+   - Password: `password123` (or your MINIO_ROOT_PASSWORD from .env)
+3. **Verify**: You should see the MinIO dashboard
+
+#### Step 1.3.6: Troubleshooting Service Startup
+
+If services don't start:
+
+```bash
+# Check if ports are already in use
+lsof -i :9000   # Check MinIO API port
+lsof -i :9001   # Check MinIO Console port
+lsof -i :19120  # Check Nessie port
+
+# If ports are in use, either:
+# 1. Stop the conflicting service
+# 2. Change ports in docker-compose.yml and .env
+
+# View detailed error logs
+docker-compose logs
+
+# Restart services
+docker-compose restart
+
+# Complete reset (WARNING: deletes all data)
+docker-compose down -v
+docker-compose up -d
 ```
 
 ---
@@ -150,17 +414,25 @@ curl http://localhost:19120/api/v2/config
 
 ### Step 2.1: Create config/iceberg_config.py
 
+Create `config/iceberg_config.py` with environment variable support:
+
 ```python
-# MinIO/S3 Configuration
-S3_ENDPOINT = "http://localhost:9000"
-S3_ACCESS_KEY = "admin"
-S3_SECRET_KEY = "password123"
-S3_BUCKET = "lakehouse"
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# MinIO/S3 Configuration (from .env or defaults)
+S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://localhost:9000")
+S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "admin")
+S3_SECRET_KEY = os.getenv("S3_SECRET_KEY", "password123")
+S3_BUCKET = os.getenv("S3_BUCKET", "lakehouse")
 
 # Nessie Configuration
-NESSIE_URI = "http://localhost:19120/api/v2"
+NESSIE_URI = os.getenv("NESSIE_URI", "http://localhost:19120/api/v2")
 
-# Iceberg Catalog
+# Iceberg Catalog Configuration
 CATALOG_CONFIG = {
     "type": "rest",
     "uri": NESSIE_URI,
@@ -169,13 +441,47 @@ CATALOG_CONFIG = {
     "s3.access-key-id": S3_ACCESS_KEY,
     "s3.secret-access-key": S3_SECRET_KEY,
     "s3.path-style-access": "true",
+    # Additional S3 settings for MinIO compatibility
+    "s3.region": "us-east-1",  # MinIO doesn't care about region, but required
 }
 
-# Configuration
-NAMESPACE = "ecommerce"
-BRONZE_BRANCH = "bronze"
-SILVER_BRANCH = "silver"
-GOLD_BRANCH = "gold"
+# Project Configuration
+NAMESPACE = os.getenv("NAMESPACE", "ecommerce")
+BRONZE_BRANCH = os.getenv("BRONZE_BRANCH", "bronze")
+SILVER_BRANCH = os.getenv("SILVER_BRANCH", "silver")
+GOLD_BRANCH = os.getenv("GOLD_BRANCH", "gold")
+
+# Print configuration (without secrets) for verification
+def print_config():
+    print("=" * 60)
+    print("LAKEHOUSE CONFIGURATION")
+    print("=" * 60)
+    print(f"S3 Endpoint: {S3_ENDPOINT}")
+    print(f"S3 Bucket: {S3_BUCKET}")
+    print(f"Nessie URI: {NESSIE_URI}")
+    print(f"Namespace: {NAMESPACE}")
+    print(f"Branches: {BRONZE_BRANCH}, {SILVER_BRANCH}, {GOLD_BRANCH}")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    print_config()
+```
+
+**Test the configuration:**
+```bash
+# Verify config loads correctly
+python config/iceberg_config.py
+
+# Expected output:
+# ============================================================
+# LAKEHOUSE CONFIGURATION
+# ============================================================
+# S3 Endpoint: http://localhost:9000
+# S3 Bucket: lakehouse
+# Nessie URI: http://localhost:19120/api/v2
+# Namespace: ecommerce
+# Branches: bronze, silver, gold
+# ============================================================
 ```
 
 ### Step 2.2: Create scripts/utils/storage_utils.py
@@ -243,46 +549,211 @@ CUSTOMERS_SCHEMA = Schema(
 
 ### Step 2.3: Setup MinIO and Nessie
 
-Create `scripts/utils/setup_minio.py`:
+#### Step 2.3.1: Create scripts/utils/setup_minio.py
+
 ```python
+import sys
+import os
 from minio import Minio
+from minio.error import S3Error
 
-client = Minio("localhost:9000", access_key="admin", secret_key="password123", secure=False)
+# Add project root to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from config.iceberg_config import S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET
 
-bucket_name = "lakehouse"
-if not client.bucket_exists(bucket_name):
-    client.make_bucket(bucket_name)
-    print(f"✓ Created bucket: {bucket_name}")
-else:
-    print(f"✓ Bucket exists: {bucket_name}")
+def setup_minio():
+    """Create MinIO bucket if it doesn't exist"""
+    print("=" * 60)
+    print("SETTING UP MINIO")
+    print("=" * 60)
+    
+    # Extract host and port from endpoint
+    endpoint = S3_ENDPOINT.replace("http://", "").replace("https://", "")
+    
+    try:
+        # Initialize MinIO client
+        client = Minio(
+            endpoint,
+            access_key=S3_ACCESS_KEY,
+            secret_key=S3_SECRET_KEY,
+            secure=False  # Set to True for HTTPS
+        )
+        
+        print(f"✓ Connected to MinIO at {S3_ENDPOINT}")
+        
+        # Check if bucket exists
+        if client.bucket_exists(S3_BUCKET):
+            print(f"✓ Bucket '{S3_BUCKET}' already exists")
+        else:
+            # Create bucket
+            client.make_bucket(S3_BUCKET)
+            print(f"✓ Created bucket: {S3_BUCKET}")
+        
+        # Verify bucket is accessible
+        if client.bucket_exists(S3_BUCKET):
+            print(f"✓ Bucket '{S3_BUCKET}' is accessible")
+            return True
+        else:
+            print(f"✗ Failed to verify bucket '{S3_BUCKET}'")
+            return False
+            
+    except S3Error as e:
+        print(f"✗ MinIO S3 Error: {e}")
+        return False
+    except Exception as e:
+        print(f"✗ Error connecting to MinIO: {e}")
+        print(f"  Endpoint: {S3_ENDPOINT}")
+        print(f"  Bucket: {S3_BUCKET}")
+        return False
+
+if __name__ == "__main__":
+    success = setup_minio()
+    sys.exit(0 if success else 1)
 ```
 
-Create `scripts/utils/setup_nessie.py`:
+#### Step 2.3.2: Create scripts/utils/setup_nessie.py
+
 ```python
+import sys
+import os
 import requests
+import time
 
-NESSIE_URL = "http://localhost:19120/api/v2"
+# Add project root to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from config.iceberg_config import NESSIE_URI, BRONZE_BRANCH, SILVER_BRANCH, GOLD_BRANCH
 
-def create_branch(branch_name):
-    payload = {"name": branch_name, "type": "BRANCH"}
-    response = requests.post(f"{NESSIE_URL}/trees", json=payload, headers={"Content-Type": "application/json"})
+def wait_for_nessie(max_retries=10, delay=2):
+    """Wait for Nessie to be ready"""
+    print("Waiting for Nessie to be ready...")
+    for i in range(max_retries):
+        try:
+            response = requests.get(f"{NESSIE_URI}/config", timeout=5)
+            if response.status_code == 200:
+                print("✓ Nessie is ready")
+                return True
+        except requests.exceptions.RequestException:
+            pass
+        print(f"  Attempt {i+1}/{max_retries}...")
+        time.sleep(delay)
+    return False
+
+def create_branch(branch_name, base_branch="main"):
+    """Create a Nessie branch"""
+    payload = {
+        "name": branch_name,
+        "type": "BRANCH",
+        "hash": None  # Create from main branch
+    }
     
-    if response.status_code in [200, 201]:
-        print(f"✓ Created branch: {branch_name}")
-    elif response.status_code == 409:
-        print(f"✓ Branch exists: {branch_name}")
-    else:
-        print(f"✗ Failed: {response.text}")
+    try:
+        response = requests.post(
+            f"{NESSIE_URI}/trees",
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=10
+        )
+        
+        if response.status_code in [200, 201]:
+            print(f"✓ Created branch: {branch_name}")
+            return True
+        elif response.status_code == 409:
+            print(f"✓ Branch '{branch_name}' already exists")
+            return True
+        else:
+            print(f"✗ Failed to create branch '{branch_name}': {response.status_code}")
+            print(f"  Response: {response.text}")
+            return False
+    except requests.exceptions.RequestException as e:
+        print(f"✗ Error creating branch '{branch_name}': {e}")
+        return False
 
-for branch in ["bronze", "silver", "gold"]:
-    create_branch(branch)
+def list_branches():
+    """List all Nessie branches"""
+    try:
+        response = requests.get(f"{NESSIE_URI}/trees", timeout=10)
+        if response.status_code == 200:
+            branches = response.json().get("references", [])
+            return branches
+        return []
+    except Exception as e:
+        print(f"✗ Error listing branches: {e}")
+        return []
 
-response = requests.get(f"{NESSIE_URL}/trees")
-if response.status_code == 200:
-    branches = response.json().get("references", [])
-    print("\nBranches:")
-    for b in branches:
-        print(f"  - {b['name']}")
+def setup_nessie():
+    """Setup Nessie branches"""
+    print("=" * 60)
+    print("SETTING UP NESSIE")
+    print("=" * 60)
+    
+    # Wait for Nessie to be ready
+    if not wait_for_nessie():
+        print("✗ Nessie is not accessible. Check if container is running.")
+        return False
+    
+    # Create branches
+    branches_to_create = [BRONZE_BRANCH, SILVER_BRANCH, GOLD_BRANCH]
+    success = True
+    
+    for branch in branches_to_create:
+        if not create_branch(branch):
+            success = False
+    
+    # List all branches
+    print("\n" + "=" * 60)
+    print("AVAILABLE BRANCHES")
+    print("=" * 60)
+    all_branches = list_branches()
+    for b in all_branches:
+        branch_type = b.get('type', 'UNKNOWN')
+        branch_name = b.get('name', 'UNNAMED')
+        print(f"  - {branch_name} ({branch_type})")
+    
+    return success
+
+if __name__ == "__main__":
+    success = setup_nessie()
+    sys.exit(0 if success else 1)
+```
+
+#### Step 2.3.3: Run Setup Scripts
+
+```bash
+# Ensure virtual environment is activated
+source venv/bin/activate  # Linux/Mac
+# OR
+venv\Scripts\activate     # Windows
+
+# Setup MinIO bucket
+python scripts/utils/setup_minio.py
+
+# Expected output:
+# ============================================================
+# SETTING UP MINIO
+# ============================================================
+# ✓ Connected to MinIO at http://localhost:9000
+# ✓ Created bucket: lakehouse
+# ✓ Bucket 'lakehouse' is accessible
+
+# Setup Nessie branches
+python scripts/utils/setup_nessie.py
+
+# Expected output:
+# ============================================================
+# SETTING UP NESSIE
+# ============================================================
+# Waiting for Nessie to be ready...
+# ✓ Nessie is ready
+# ✓ Created branch: bronze
+# ✓ Created branch: silver
+# ✓ Created branch: gold
+# ============================================================
+# AVAILABLE BRANCHES
+# ============================================================
+#   - main (BRANCH)
+#   - bronze (BRANCH)
+#   - silver (BRANCH)
+#   - gold (BRANCH)
 ```
 
 ---
@@ -291,60 +762,168 @@ if response.status_code == 200:
 
 ### Step 3.1: Create requirements.txt
 
+Create `requirements.txt` in the project root:
+
 ```txt
+# Core Data Processing
 pyiceberg==0.5.1
-requests==2.31.0
 polars==0.20.0
 pandas==2.1.4
 pyarrow==14.0.1
+
+# Storage & APIs
 minio==7.2.0
 boto3==1.34.0
+requests==2.31.0
+
+# Configuration
 python-dotenv==1.0.0
 pyyaml==6.0.1
+
+# Testing
 pytest==7.4.3
+pytest-cov==4.1.0
+
+# Utilities
+tqdm==4.66.1  # Progress bars
 ```
+
+**Note**: Pin versions for reproducibility. Update as needed for your environment.
 
 ### Step 3.2: Setup Virtual Environment
 
+#### Step 3.2.1: Create Virtual Environment
+
 ```bash
+# Navigate to project root
+cd ~/Documents/lakehouse-project  # Adjust as needed
+
 # Create virtual environment
 python -m venv venv
 
-# Activate (Linux/Mac)
+# Verify venv directory was created
+ls -la venv/  # Linux/Mac
+# OR
+dir venv      # Windows
+```
+
+#### Step 3.2.2: Activate Virtual Environment
+
+**Linux/macOS:**
+```bash
 source venv/bin/activate
 
-# Activate (Windows)
+# Verify activation (prompt should show (venv))
+which python
+# Should show: .../lakehouse-project/venv/bin/python
+```
+
+**Windows:**
+```cmd
 venv\Scripts\activate
 
-# Install dependencies
+# Verify activation
+where python
+# Should show: ...\lakehouse-project\venv\Scripts\python.exe
+```
+
+**PowerShell (Windows):**
+```powershell
+venv\Scripts\Activate.ps1
+
+# If you get execution policy error:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+#### Step 3.2.3: Upgrade pip and Install Dependencies
+
+```bash
+# Upgrade pip to latest version
 pip install --upgrade pip
+
+# Verify pip version (should be 23.0+)
+pip --version
+
+# Install all dependencies
 pip install -r requirements.txt
+
+# This will take 2-5 minutes depending on your internet speed
+# Expected output shows packages being installed
+```
+
+#### Step 3.2.4: Verify Installation
+
+```bash
+# Test critical imports
+python -c "import pyiceberg; print('✓ pyiceberg:', pyiceberg.__version__)"
+python -c "import polars; print('✓ polars:', polars.__version__)"
+python -c "import minio; print('✓ minio installed')"
+python -c "from dotenv import load_dotenv; print('✓ python-dotenv installed')"
+
+# List installed packages
+pip list
+
+# Expected: Should see all packages from requirements.txt
 ```
 
 ### Step 3.3: Initialize System
 
+#### Step 3.3.1: Verify Services Are Running
+
 ```bash
-# Install minio package first
-pip install minio requests
+# Check Docker containers
+docker-compose ps
+
+# Both services should show "Up (healthy)"
+# If not, start them:
+docker-compose up -d
+```
+
+#### Step 3.3.2: Run Setup Scripts
+
+```bash
+# Ensure you're in project root and venv is activated
+pwd  # Should show .../lakehouse-project
 
 # Setup MinIO bucket
 python scripts/utils/setup_minio.py
 
+# Verify: Should see "✓ Created bucket: lakehouse" or "✓ Bucket exists"
+
 # Setup Nessie branches
 python scripts/utils/setup_nessie.py
+
+# Verify: Should see branches created (bronze, silver, gold)
+```
+
+#### Step 3.3.3: Test Configuration
+
+```bash
+# Test configuration loading
+python config/iceberg_config.py
+
+# Should print configuration without errors
 ```
 
 ### Step 3.4: Generate Sample Data
 
-Create `scripts/utils/generate_sample_data.py`:
+#### Step 3.4.1: Create scripts/utils/generate_sample_data.py
+
 ```python
+import sys
+import os
 import polars as pl
 from datetime import datetime, timedelta
 import random
-import os
 
-def generate_orders_data(num_records=1000):
+# Add project root to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+def generate_orders_data(num_records=1000, seed=42):
+    """Generate sample orders data"""
+    random.seed(seed)  # For reproducibility
     start_date = datetime(2024, 1, 1)
+    
     data = {
         "order_id": [f"ORD{i:06d}" for i in range(1, num_records + 1)],
         "customer_id": [f"CUST{random.randint(1, 200):04d}" for _ in range(num_records)],
@@ -355,7 +934,10 @@ def generate_orders_data(num_records=1000):
     }
     return pl.DataFrame(data)
 
-def generate_customers_data(num_records=200):
+def generate_customers_data(num_records=200, seed=42):
+    """Generate sample customers data"""
+    random.seed(seed)  # For reproducibility
+    
     data = {
         "customer_id": [f"CUST{i:04d}" for i in range(1, num_records + 1)],
         "name": [f"Customer {i}" for i in range(1, num_records + 1)],
@@ -365,19 +947,108 @@ def generate_customers_data(num_records=200):
     }
     return pl.DataFrame(data)
 
-os.makedirs("data/raw", exist_ok=True)
-orders_df = generate_orders_data(1000)
-orders_df.write_csv("data/raw/orders.csv")
-print(f"✓ Generated orders.csv: {len(orders_df)} records")
+def main():
+    print("=" * 60)
+    print("GENERATING SAMPLE DATA")
+    print("=" * 60)
+    
+    # Ensure data/raw directory exists
+    os.makedirs("data/raw", exist_ok=True)
+    
+    # Generate orders data
+    print("\nGenerating orders data...")
+    orders_df = generate_orders_data(1000)
+    orders_path = "data/raw/orders.csv"
+    orders_df.write_csv(orders_path)
+    print(f"✓ Generated {orders_path}: {len(orders_df):,} records")
+    print(f"  File size: {os.path.getsize(orders_path) / 1024:.2f} KB")
+    
+    # Generate customers data
+    print("\nGenerating customers data...")
+    customers_df = generate_customers_data(200)
+    customers_path = "data/raw/customers.csv"
+    customers_df.write_csv(customers_path)
+    print(f"✓ Generated {customers_path}: {len(customers_df):,} records")
+    print(f"  File size: {os.path.getsize(customers_path) / 1024:.2f} KB")
+    
+    # Display sample data
+    print("\n" + "=" * 60)
+    print("SAMPLE ORDERS DATA (first 5 rows)")
+    print("=" * 60)
+    print(orders_df.head(5))
+    
+    print("\n" + "=" * 60)
+    print("SAMPLE CUSTOMERS DATA (first 5 rows)")
+    print("=" * 60)
+    print(customers_df.head(5))
+    
+    # Data quality summary
+    print("\n" + "=" * 60)
+    print("DATA QUALITY SUMMARY")
+    print("=" * 60)
+    print(f"Orders:")
+    print(f"  Total records: {len(orders_df):,}")
+    print(f"  Unique order_ids: {orders_df['order_id'].n_unique():,}")
+    print(f"  Date range: {orders_df['order_date'].min()} to {orders_df['order_date'].max()}")
+    print(f"  Amount range: ${orders_df['total_amount'].min():.2f} - ${orders_df['total_amount'].max():.2f}")
+    
+    print(f"\nCustomers:")
+    print(f"  Total records: {len(customers_df):,}")
+    print(f"  Unique customer_ids: {customers_df['customer_id'].n_unique():,}")
+    print(f"  Active customers: {customers_df['is_active'].sum()}")
+    
+    print("\n✓ Sample data generation complete!")
 
-customers_df = generate_customers_data(200)
-customers_df.write_csv("data/raw/customers.csv")
-print(f"✓ Generated customers.csv: {len(customers_df)} records")
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print(f"✗ Error generating sample data: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 ```
 
-Run it:
+#### Step 3.4.2: Run Data Generation
+
 ```bash
+# Ensure you're in project root with venv activated
 python scripts/utils/generate_sample_data.py
+
+# Expected output:
+# ============================================================
+# GENERATING SAMPLE DATA
+# ============================================================
+# 
+# Generating orders data...
+# ✓ Generated data/raw/orders.csv: 1,000 records
+#   File size: XX.XX KB
+# 
+# Generating customers data...
+# ✓ Generated data/raw/customers.csv: 200 records
+#   File size: XX.XX KB
+# 
+# [Sample data preview...]
+# 
+# ✓ Sample data generation complete!
+```
+
+#### Step 3.4.3: Verify Generated Data
+
+```bash
+# Check files were created
+ls -lh data/raw/
+
+# Expected:
+# -rw-r--r--  1 user  staff    XXK  ...  customers.csv
+# -rw-r--r--  1 user  staff    XXK  ...  orders.csv
+
+# Verify file contents (first few lines)
+head -5 data/raw/orders.csv
+head -5 data/raw/customers.csv
+
+# Count lines (should be 1001 for orders.csv including header, 201 for customers.csv)
+wc -l data/raw/*.csv
 ```
 
 ---
@@ -1061,54 +1732,213 @@ if __name__ == "__main__":
 
 ## ⚡ QUICK START COMMANDS {#quickstart}
 
-### Initial Setup (One Time)
+### Complete Setup Script (One-Time)
 
+Create `setup.sh` (Linux/Mac) or `setup.bat` (Windows) for automated setup:
+
+**Linux/Mac (`setup.sh`):**
 ```bash
-# 1. Start infrastructure
-docker-compose up -d
+#!/bin/bash
+set -e  # Exit on error
 
-# 2. Setup Python environment
+echo "=========================================="
+echo "LAKEHOUSE SETUP"
+echo "=========================================="
+
+# 1. Create .env file if it doesn't exist
+if [ ! -f .env ]; then
+    echo "Creating .env file..."
+    cat > .env << EOF
+MINIO_ROOT_USER=admin
+MINIO_ROOT_PASSWORD=password123
+S3_ENDPOINT=http://localhost:9000
+S3_ACCESS_KEY=admin
+S3_SECRET_KEY=password123
+S3_BUCKET=lakehouse
+NESSIE_URI=http://localhost:19120/api/v2
+NAMESPACE=ecommerce
+BRONZE_BRANCH=bronze
+SILVER_BRANCH=silver
+GOLD_BRANCH=gold
+EOF
+    echo "✓ Created .env file"
+else
+    echo "✓ .env file already exists"
+fi
+
+# 2. Start Docker services
+echo ""
+echo "Starting Docker services..."
+docker-compose up -d
+sleep 10  # Wait for services to start
+
+# 3. Setup Python environment
+echo ""
+echo "Setting up Python environment..."
 python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
+source venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 
-# 3. Initialize system
+# 4. Initialize storage
+echo ""
+echo "Initializing storage..."
 python scripts/utils/setup_minio.py
 python scripts/utils/setup_nessie.py
 
-# 4. Generate sample data
+# 5. Generate sample data
+echo ""
+echo "Generating sample data..."
 python scripts/utils/generate_sample_data.py
+
+echo ""
+echo "=========================================="
+echo "✓ SETUP COMPLETE!"
+echo "=========================================="
+echo ""
+echo "Next steps:"
+echo "  1. Activate virtual environment: source venv/bin/activate"
+echo "  2. Run pipeline: python scripts/run_full_pipeline.py"
+echo "  3. Query data: python scripts/utils/query_tables.py"
 ```
 
-### Run Pipeline
+**Windows (`setup.bat`):**
+```batch
+@echo off
+echo ==========================================
+echo LAKEHOUSE SETUP
+echo ==========================================
+
+REM 1. Create .env file
+if not exist .env (
+    echo Creating .env file...
+    (
+        echo MINIO_ROOT_USER=admin
+        echo MINIO_ROOT_PASSWORD=password123
+        echo S3_ENDPOINT=http://localhost:9000
+        echo S3_ACCESS_KEY=admin
+        echo S3_SECRET_KEY=password123
+        echo S3_BUCKET=lakehouse
+        echo NESSIE_URI=http://localhost:19120/api/v2
+        echo NAMESPACE=ecommerce
+        echo BRONZE_BRANCH=bronze
+        echo SILVER_BRANCH=silver
+        echo GOLD_BRANCH=gold
+    ) > .env
+    echo ✓ Created .env file
+) else (
+    echo ✓ .env file already exists
+)
+
+REM 2. Start Docker services
+echo.
+echo Starting Docker services...
+docker-compose up -d
+timeout /t 10 /nobreak
+
+REM 3. Setup Python environment
+echo.
+echo Setting up Python environment...
+python -m venv venv
+call venv\Scripts\activate.bat
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
+REM 4. Initialize storage
+echo.
+echo Initializing storage...
+python scripts\utils\setup_minio.py
+python scripts\utils\setup_nessie.py
+
+REM 5. Generate sample data
+echo.
+echo Generating sample data...
+python scripts\utils\generate_sample_data.py
+
+echo.
+echo ==========================================
+echo ✓ SETUP COMPLETE!
+echo ==========================================
+pause
+```
+
+**Run setup:**
+```bash
+# Linux/Mac
+chmod +x setup.sh
+./setup.sh
+
+# Windows
+setup.bat
+```
+
+### Daily Workflow Commands
+
+#### Start Your Work Session
 
 ```bash
-# Run full pipeline
+# 1. Navigate to project
+cd ~/Documents/lakehouse-project
+
+# 2. Activate virtual environment
+source venv/bin/activate  # Linux/Mac
+# OR
+venv\Scripts\activate     # Windows
+
+# 3. Verify services are running
+docker-compose ps
+
+# 4. Check system health
+python scripts/utils/monitoring.py
+```
+
+#### Run Pipeline
+
+```bash
+# Run full pipeline (recommended)
 python scripts/run_full_pipeline.py
 
 # Or run individual stages
 python scripts/bronze/ingest_orders.py
+python scripts/bronze/ingest_customers.py
 python scripts/silver/transform_orders.py
+python scripts/silver/transform_customers.py
 python scripts/gold/create_order_analytics.py
+python scripts/gold/create_customer_analytics.py
 ```
 
-### Query and Monitor
+#### Query and Monitor
 
 ```bash
-# Query tables
+# Query all tables
 python scripts/utils/query_tables.py
+
+# Query specific table
+python -c "
+from scripts.utils.query_tables import query_table
+query_table('bronze', 'orders_bronze', limit=10)
+"
 
 # Check system health
 python scripts/utils/monitoring.py
 
 # Run tests
 python tests/test_pipeline.py
+# OR
+pytest tests/ -v
 ```
 
-### Stop Services
+#### Stop Services
 
 ```bash
+# Stop services (keeps data)
+docker-compose stop
+
+# Stop and remove containers (keeps volumes/data)
 docker-compose down
+
+# Stop and remove everything including data (WARNING: deletes all data)
+docker-compose down -v
 ```
 
 ---
@@ -1117,98 +1947,553 @@ docker-compose down
 
 ### Problem: Docker containers won't start
 
+**Symptoms:**
+- `docker-compose up -d` fails
+- Containers show as "Exited" or "Restarting"
+- Port already in use errors
+
+**Solutions:**
+
 ```bash
-# Check Docker is running
+# 1. Check Docker is running
 docker info
+# If this fails, start Docker Desktop application
 
-# Check for port conflicts
-docker-compose ps
+# 2. Check for port conflicts
+lsof -i :9000   # MinIO API
+lsof -i :9001   # MinIO Console
+lsof -i :19120  # Nessie
 
-# Remove old containers and restart
+# If ports are in use:
+# Option A: Stop the conflicting service
+# Option B: Change ports in docker-compose.yml and .env
+
+# 3. Check container logs for errors
+docker-compose logs minio
+docker-compose logs nessie
+
+# 4. Remove old containers and restart
 docker-compose down -v
 docker-compose up -d
+
+# 5. Verify containers are healthy
+docker-compose ps
+# Wait 30 seconds, then check again
 ```
+
+**Common Issues:**
+- **Port already in use**: Another service is using the port. Change ports in `.env` and `docker-compose.yml`
+- **Insufficient memory**: Increase Docker Desktop memory allocation (Settings → Resources → Memory)
+- **Permission denied**: On Linux, add user to docker group: `sudo usermod -aG docker $USER`
 
 ### Problem: Cannot connect to Nessie
 
+**Symptoms:**
+- `Connection refused` errors
+- `404 Not Found` when accessing API
+- Scripts fail with Nessie connection errors
+
+**Solutions:**
+
 ```bash
-# Test Nessie API
+# 1. Verify Nessie container is running
+docker ps | grep nessie
+# Should show lakehouse-nessie as "Up"
+
+# 2. Check Nessie health
+curl http://localhost:19120/api/v2/config
+# Expected: JSON response
+
+# 3. Check Nessie logs
+docker logs lakehouse-nessie --tail 50
+# Look for errors or startup messages
+
+# 4. Restart Nessie
+docker-compose restart nessie
+sleep 15  # Wait for startup
 curl http://localhost:19120/api/v2/config
 
-# Check logs
-docker logs lakehouse-nessie
-
-# Restart Nessie
-docker-compose restart nessie
+# 5. Complete reset (if needed)
+docker-compose down
+docker-compose up -d nessie
 ```
+
+**Common Issues:**
+- **Container not ready**: Wait 15-20 seconds after starting
+- **Network issues**: Ensure containers are on same network: `docker network ls`
+- **Version mismatch**: Ensure using compatible Nessie version
 
 ### Problem: MinIO access denied
 
-```bash
-# Verify credentials match in:
-# - docker-compose.yml
-# - config/iceberg_config.py
+**Symptoms:**
+- `Access Denied` errors
+- Cannot create buckets
+- Authentication failures
 
-# Access MinIO console
-# http://localhost:9001
-# Login: admin / password123
+**Solutions:**
+
+```bash
+# 1. Verify credentials in .env file
+cat .env | grep MINIO
+
+# 2. Verify credentials match in:
+#    - .env file
+#    - docker-compose.yml
+#    - config/iceberg_config.py
+
+# 3. Test MinIO connection
+python -c "
+from minio import Minio
+client = Minio('localhost:9000', 
+               access_key='admin', 
+               secret_key='password123', 
+               secure=False)
+print('Connected:', client.bucket_exists('lakehouse'))
+"
+
+# 4. Access MinIO console
+# Open: http://localhost:9001
+# Login with credentials from .env
+
+# 5. Reset MinIO (WARNING: deletes all data)
+docker-compose down
+docker volume rm lakehouse-project_minio-data
+docker-compose up -d
+python scripts/utils/setup_minio.py
 ```
+
+**Common Issues:**
+- **Wrong credentials**: Double-check `.env` file values
+- **Bucket doesn't exist**: Run `python scripts/utils/setup_minio.py`
+- **SSL/TLS issues**: Ensure `secure=False` for local MinIO
 
 ### Problem: Module not found errors
 
-```bash
-# Ensure virtual environment is activated
-source venv/bin/activate  # or venv\Scripts\activate
+**Symptoms:**
+- `ModuleNotFoundError: No module named 'pyiceberg'`
+- Import errors in scripts
+- `python-dotenv` not found
 
-# Reinstall requirements
+**Solutions:**
+
+```bash
+# 1. Verify virtual environment is activated
+which python  # Linux/Mac
+# Should show: .../venv/bin/python
+
+where python   # Windows
+# Should show: ...\venv\Scripts\python.exe
+
+# If not activated:
+source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate    # Windows
+
+# 2. Verify packages are installed
+pip list | grep pyiceberg
+pip list | grep polars
+
+# 3. Reinstall requirements
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Verify installation
-python -c "import pyiceberg; print('OK')"
+# 4. Verify critical imports
+python -c "import pyiceberg; print('✓ pyiceberg OK')"
+python -c "import polars; print('✓ polars OK')"
+python -c "from dotenv import load_dotenv; print('✓ dotenv OK')"
+
+# 5. If still failing, recreate venv
+deactivate  # Exit current venv
+rm -rf venv  # Linux/Mac
+# OR
+rmdir /s venv  # Windows
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate
+pip install -r requirements.txt
 ```
+
+**Common Issues:**
+- **Wrong Python version**: Ensure Python 3.9+ (`python --version`)
+- **Virtual environment not activated**: Always activate before running scripts
+- **Corrupted installation**: Recreate virtual environment
 
 ### Problem: Table not found
 
+**Symptoms:**
+- `TableNotFoundException`
+- Scripts fail when loading tables
+- Tables don't appear in queries
+
+**Solutions:**
+
 ```bash
-# Check branch exists
+# 1. Verify branch exists
 curl http://localhost:19120/api/v2/trees
+# Should list branches including bronze, silver, gold
 
-# Verify you're on correct branch in your script
-# catalog = get_catalog(branch="bronze")
+# 2. Check if table was created
+python -c "
+from scripts.utils.storage_utils import get_catalog, table_exists
+from config.iceberg_config import NAMESPACE, BRONZE_BRANCH
+catalog = get_catalog(branch=BRONZE_BRANCH)
+print('Table exists:', table_exists(catalog, NAMESPACE, 'orders_bronze'))
+"
 
-# Re-run ingestion if needed
+# 3. List all tables in namespace
+python -c "
+from scripts.utils.storage_utils import get_catalog
+from config.iceberg_config import NAMESPACE, BRONZE_BRANCH
+catalog = get_catalog(branch=BRONZE_BRANCH)
+tables = catalog.list_tables(NAMESPACE)
+print('Tables:', list(tables))
+"
+
+# 4. Re-run ingestion
 python scripts/bronze/ingest_orders.py
+python scripts/bronze/ingest_customers.py
+
+# 5. Verify data was written
+python scripts/utils/query_tables.py
 ```
 
+**Common Issues:**
+- **Wrong branch**: Verify branch name in script matches Nessie branch
+- **Namespace mismatch**: Check NAMESPACE in `iceberg_config.py`
+- **Data not ingested**: Re-run ingestion scripts
+
 ### Problem: Quality checks failing
+
+**Symptoms:**
+- Quality check reports show failures
+- Null values in required columns
+- Duplicate records
+
+**Solutions:**
 
 ```python
 # Debug data issues
 import polars as pl
 
+# Load raw data
 df = pl.read_csv("data/raw/orders.csv")
+
+# Check schema
+print("Schema:")
 print(df.schema)
+
+# Check statistics
+print("\nStatistics:")
 print(df.describe())
+
+# Check nulls
+print("\nNull counts:")
 print(df.null_count())
+
+# Check duplicates
+print("\nDuplicates:")
+print(f"Total rows: {len(df)}")
+print(f"Unique order_ids: {df['order_id'].n_unique()}")
+
+# Check value ranges
+print("\nValue ranges:")
+print(f"Amount range: {df['total_amount'].min()} - {df['total_amount'].max()}")
+print(f"Date range: {df['order_date'].min()} - {df['order_date'].max()}")
+
+# Check specific issues
+print("\nStatus distribution:")
+print(df['status'].value_counts())
 ```
+
+**Common Issues:**
+- **Data quality issues in source**: Clean data before ingestion
+- **Schema mismatch**: Verify schema matches data types
+- **Missing required fields**: Ensure all required columns have values
 
 ### Problem: Out of memory
 
+**Symptoms:**
+- `MemoryError` exceptions
+- Docker containers killed
+- System becomes unresponsive
+
+**Solutions:**
+
 ```bash
-# Increase Docker memory in Docker Desktop settings
-# Or process data in smaller batches
+# 1. Increase Docker memory allocation
+# Docker Desktop → Settings → Resources → Memory
+# Recommended: 8GB minimum, 16GB for large datasets
+
+# 2. Process data in batches
+# Modify scripts to process data in chunks:
+python -c "
+import polars as pl
+chunk_size = 10000
+for i in range(0, 100000, chunk_size):
+    df = pl.read_csv('data/raw/orders.csv', skip_rows=i, n_rows=chunk_size)
+    # Process chunk...
+"
+
+# 3. Use streaming/scan operations
+# Instead of loading all data:
+# df = pl.read_csv("file.csv")  # Loads all
+# Use: pl.scan_csv("file.csv")  # Lazy evaluation
+
+# 4. Free up system memory
+# Close other applications
+# Restart Docker Desktop
 ```
 
 ### Problem: Slow queries
 
-```python
-# Use predicate pushdown
-scan = table.scan(row_filter="year = 2024")
+**Symptoms:**
+- Queries take very long
+- Timeouts
+- High CPU/memory usage
 
-# Select only needed columns
-scan = table.scan(selected_fields=("order_id", "total_amount"))
+**Solutions:**
+
+```python
+# 1. Use predicate pushdown (filter early)
+from scripts.utils.storage_utils import get_catalog
+from config.iceberg_config import NAMESPACE, SILVER_BRANCH
+
+catalog = get_catalog(branch=SILVER_BRANCH)
+table = catalog.load_table(f"{NAMESPACE}.orders_silver")
+
+# Filter before loading
+scan = table.scan(row_filter="year = 2024 AND month = 1")
+df = pl.from_arrow(scan.to_arrow())
+
+# 2. Select only needed columns
+scan = table.scan(selected_fields=("order_id", "total_amount", "status"))
+df = pl.from_arrow(scan.to_arrow())
+
+# 3. Use partitioning
+# Ensure tables are partitioned by commonly filtered columns
+# (year, month, etc.)
+
+# 4. Increase batch size for large datasets
+scan = table.scan()
+df = pl.from_arrow(scan.to_arrow())  # Loads all
+# Consider processing in batches for very large tables
 ```
+
+### Problem: Data not appearing after ingestion
+
+**Symptoms:**
+- Scripts complete successfully
+- But queries return no data
+- Tables exist but are empty
+
+**Solutions:**
+
+```bash
+# 1. Verify data was written
+python scripts/utils/query_tables.py
+
+# 2. Check MinIO for data files
+# Access MinIO console: http://localhost:9001
+# Navigate to: lakehouse → warehouse → ecommerce → orders_bronze
+
+# 3. Verify branch is correct
+curl http://localhost:19120/api/v2/trees
+# Check you're querying the correct branch
+
+# 4. Check for errors in ingestion logs
+# Re-run ingestion with verbose output:
+python scripts/bronze/ingest_orders.py
+
+# 5. Verify schema matches data
+python -c "
+import polars as pl
+df = pl.read_csv('data/raw/orders.csv')
+print('CSV columns:', df.columns)
+print('CSV types:', df.dtypes)
+"
+# Compare with schema in storage_utils.py
+```
+
+### Getting Help
+
+If problems persist:
+
+1. **Check logs**: `docker-compose logs` and script error messages
+2. **Verify versions**: Ensure all package versions are compatible
+3. **Reset environment**: `docker-compose down -v` and start fresh
+4. **Check documentation**: 
+   - Apache Iceberg: https://iceberg.apache.org/docs/
+   - Project Nessie: https://projectnessie.org/docs/
+   - Polars: https://pola-rs.github.io/polars/
+
+---
+
+## 💡 BEST PRACTICES {#bestpractices}
+
+### Credential Management
+
+1. **Never commit `.env` to version control**
+   - Already in `.gitignore`
+   - Use `.env.example` as template
+   - Rotate credentials regularly in production
+
+2. **Use different credentials for each environment**
+   - Development: Simple passwords (as shown)
+   - Staging: Medium complexity
+   - Production: Strong, randomly generated passwords
+
+3. **Store production credentials securely**
+   - Use secret management services (AWS Secrets Manager, HashiCorp Vault)
+   - Never hardcode in scripts
+   - Use environment variables or secret injection
+
+### Data Pipeline Practices
+
+1. **Always validate data before ingestion**
+   ```python
+   # Run quality checks before writing
+   from scripts.utils.quality_checks import DataQualityCheck
+   qc = DataQualityCheck("orders_bronze")
+   qc.check_row_count(df, min_rows=1)
+   qc.check_no_nulls(df, ["order_id", "customer_id"])
+   if not qc.print_report():
+       raise ValueError("Data quality checks failed")
+   ```
+
+2. **Use Write-Audit-Publish pattern**
+   - Write to staging table first
+   - Run quality checks
+   - Only publish to production if checks pass
+
+3. **Handle errors gracefully**
+   ```python
+   try:
+       # Your pipeline code
+   except Exception as e:
+       # Log error
+       logger.error(f"Pipeline failed: {e}")
+       # Send alert (email, Slack, etc.)
+       # Exit with error code
+       sys.exit(1)
+   ```
+
+4. **Version your schemas**
+   - Document schema changes
+   - Use schema evolution features of Iceberg
+   - Test schema changes on dev branch first
+
+### Branch Management
+
+1. **Use branches for different environments**
+   - `dev`: Development/testing
+   - `staging`: Pre-production
+   - `main`: Production
+   - Feature branches for experiments
+
+2. **Merge branches carefully**
+   ```python
+   # Example: Merge dev to main
+   # Use Nessie API or UI to merge branches
+   # Verify data quality after merge
+   ```
+
+3. **Tag important versions**
+   - Tag releases
+   - Tag before major changes
+   - Enable time-travel queries
+
+### Performance Optimization
+
+1. **Partition tables appropriately**
+   - Partition by date columns (year, month)
+   - Partition by frequently filtered columns
+   - Avoid over-partitioning (too many small files)
+
+2. **Use predicate pushdown**
+   ```python
+   # Good: Filter early
+   scan = table.scan(row_filter="year = 2024")
+   
+   # Bad: Load all then filter
+   df = pl.from_arrow(table.scan().to_arrow())
+   df = df.filter(pl.col("year") == 2024)
+   ```
+
+3. **Select only needed columns**
+   ```python
+   # Good: Select specific columns
+   scan = table.scan(selected_fields=("order_id", "total_amount"))
+   
+   # Bad: Load all columns
+   df = pl.from_arrow(table.scan().to_arrow())
+   ```
+
+4. **Process data in batches for large datasets**
+   ```python
+   chunk_size = 10000
+   for i in range(0, total_rows, chunk_size):
+       chunk = df.slice(i, chunk_size)
+       # Process chunk
+   ```
+
+### Monitoring and Logging
+
+1. **Log important events**
+   ```python
+   import logging
+   logging.basicConfig(
+       level=logging.INFO,
+       format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+       handlers=[
+           logging.FileHandler('logs/pipeline.log'),
+           logging.StreamHandler()
+       ]
+   )
+   logger = logging.getLogger(__name__)
+   logger.info("Pipeline started")
+   ```
+
+2. **Monitor pipeline health**
+   - Run `python scripts/utils/monitoring.py` regularly
+   - Set up alerts for failures
+   - Track pipeline execution times
+
+3. **Track data quality metrics**
+   - Record quality check results
+   - Alert on quality degradation
+   - Maintain quality dashboards
+
+### Testing
+
+1. **Write tests for each layer**
+   - Unit tests for transformations
+   - Integration tests for pipelines
+   - End-to-end tests for full flow
+
+2. **Test with sample data first**
+   - Use small datasets for development
+   - Validate logic before processing full dataset
+   - Use realistic but manageable data volumes
+
+3. **Test error handling**
+   - Test with invalid data
+   - Test with missing data
+   - Test with schema mismatches
+
+### Documentation
+
+1. **Document your schemas**
+   - Use comments in schema definitions
+   - Maintain schema documentation
+   - Document data lineage
+
+2. **Document transformations**
+   - Explain business logic
+   - Document data quality rules
+   - Note any assumptions
+
+3. **Keep runbooks updated**
+   - Document common operations
+   - Document troubleshooting steps
+   - Document recovery procedures
 
 ---
 
@@ -1274,6 +2559,126 @@ lakehouse-project/
 
 ---
 
+## 🏭 PRODUCTION CONSIDERATIONS {#production}
+
+### Infrastructure Changes for Production
+
+1. **Replace MinIO with Production S3**
+   ```python
+   # Update .env for production
+   S3_ENDPOINT=https://s3.amazonaws.com  # AWS S3
+   # OR
+   S3_ENDPOINT=https://s3.us-east-1.amazonaws.com  # Regional endpoint
+   S3_ACCESS_KEY=<your-aws-access-key>
+   S3_SECRET_KEY=<your-aws-secret-key>
+   S3_BUCKET=<your-production-bucket>
+   ```
+
+2. **Use Persistent Nessie Storage**
+   ```yaml
+   # docker-compose.yml - Update Nessie service
+   nessie:
+     environment:
+       NESSIE_VERSION_STORE_TYPE: JDBC
+       QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/nessie
+       # Add PostgreSQL service
+   ```
+
+3. **Add Monitoring and Alerting**
+   - Set up Prometheus/Grafana for metrics
+   - Configure alerts for pipeline failures
+   - Monitor data quality metrics
+   - Track storage costs
+
+4. **Implement Backup Strategy**
+   - Regular backups of Nessie metadata
+   - S3 versioning for data files
+   - Cross-region replication
+   - Point-in-time recovery testing
+
+5. **Security Hardening**
+   - Use IAM roles instead of access keys
+   - Enable encryption at rest
+   - Enable encryption in transit (TLS)
+   - Implement network isolation (VPC)
+   - Use secret management services
+
+### Orchestration Options
+
+1. **Apache Airflow**
+   ```python
+   # orchestration/dags/lakehouse_dag.py
+   from airflow import DAG
+   from airflow.operators.bash import BashOperator
+   
+   dag = DAG('lakehouse_pipeline', schedule_interval='@daily')
+   
+   bronze_task = BashOperator(
+       task_id='bronze_ingestion',
+       bash_command='python scripts/bronze/ingest_orders.py',
+       dag=dag
+   )
+   # Add more tasks...
+   ```
+
+2. **Prefect**
+   ```python
+   from prefect import flow, task
+   
+   @task
+   def ingest_bronze():
+       # Your ingestion code
+       pass
+   
+   @flow
+   def lakehouse_pipeline():
+       ingest_bronze()
+       # Add more steps
+   ```
+
+3. **Cron Jobs** (Simple option)
+   ```bash
+   # Add to crontab
+   0 2 * * * cd /path/to/lakehouse && source venv/bin/activate && python scripts/run_full_pipeline.py
+   ```
+
+### Scaling Considerations
+
+1. **Horizontal Scaling**
+   - Use Spark for large-scale processing
+   - Distribute workloads across workers
+   - Use distributed query engines (Trino, Dremio)
+
+2. **Optimization**
+   - Implement data compaction
+   - Use columnar formats (Parquet)
+   - Implement caching strategies
+   - Optimize partition strategies
+
+3. **Cost Management**
+   - Use S3 lifecycle policies
+   - Archive old data to Glacier
+   - Monitor and optimize storage usage
+   - Use spot instances for batch processing
+
+### Migration Checklist
+
+Before moving to production:
+
+- [ ] Replace MinIO with production S3
+- [ ] Configure persistent Nessie storage
+- [ ] Set up monitoring and alerting
+- [ ] Implement backup strategy
+- [ ] Security review and hardening
+- [ ] Load testing with production-scale data
+- [ ] Disaster recovery plan
+- [ ] Documentation for operations team
+- [ ] Runbook for common issues
+- [ ] Performance benchmarking
+- [ ] Cost estimation and optimization
+
+---
+
 ## 🎉 SUCCESS!
 
 You now have a complete Git-style versioned lakehouse with:
@@ -1281,22 +2686,93 @@ You now have a complete Git-style versioned lakehouse with:
 ✅ **Medallion Architecture** (Bronze → Silver → Gold)
 ✅ **Version Control** for data (Nessie branches)
 ✅ **Quality Checks** (Write-Audit-Publish)
-✅ **Production Ready** code
+✅ **Production Ready** code structure
 ✅ **Complete Testing** suite
 ✅ **Monitoring** capabilities
+✅ **Comprehensive Documentation**
+
+### What You've Built:
+
+1. **Data Ingestion Pipeline**: Automated ingestion from raw data to Bronze layer
+2. **Transformation Pipeline**: Data cleaning and enrichment in Silver layer
+3. **Analytics Pipeline**: Aggregated analytics in Gold layer
+4. **Version Control**: Git-like branching for data with Nessie
+5. **Quality Framework**: Data quality checks and validation
+6. **Monitoring Tools**: Health checks and table statistics
 
 ### Next Steps:
 
-1. **Customize** for your data sources
-2. **Add** more transformations
-3. **Implement** Airflow orchestration
-4. **Deploy** to production
-5. **Scale** as needed
+1. **Customize for Your Data**
+   - Replace sample data with your actual data sources
+   - Adapt schemas to your domain
+   - Customize transformations for your business logic
 
-### Resources:
+2. **Enhance the Pipeline**
+   - Add more data sources
+   - Implement additional transformations
+   - Create more analytics tables
 
-- Apache Iceberg: https://iceberg.apache.org/
-- Project Nessie: https://projectnessie.org/
-- Polars: https://pola-rs.github.io/polars/
+3. **Add Orchestration**
+   - Set up Airflow/Prefect for scheduling
+   - Implement error handling and retries
+   - Add data quality alerts
+
+4. **Scale for Production**
+   - Move to production S3
+   - Set up persistent Nessie storage
+   - Implement monitoring and alerting
+   - Add backup and disaster recovery
+
+5. **Extend Functionality**
+   - Add more data quality checks
+   - Implement data lineage tracking
+   - Add data catalog integration
+   - Create BI dashboards
+
+### Learning Resources:
+
+- **Apache Iceberg**: 
+  - Documentation: https://iceberg.apache.org/docs/
+  - GitHub: https://github.com/apache/iceberg
+  
+- **Project Nessie**: 
+  - Documentation: https://projectnessie.org/docs/
+  - GitHub: https://github.com/projectnessie/nessie
+  
+- **Polars**: 
+  - Documentation: https://pola-rs.github.io/polars/
+  - User Guide: https://pola-rs.github.io/polars-book/
+  
+- **Data Lakehouse Patterns**:
+  - Medallion Architecture: https://www.databricks.com/glossary/medallion-architecture
+  - Delta Lake: https://delta.io/
+
+### Community and Support:
+
+- **Apache Iceberg Slack**: Join for community support
+- **Project Nessie Discord**: Get help from the community
+- **Stack Overflow**: Tag questions with `apache-iceberg`, `nessie`, `polars`
+
+### Final Notes:
+
+- **Keep Learning**: Data engineering is constantly evolving
+- **Iterate**: Start simple, add complexity as needed
+- **Monitor**: Always monitor your pipelines in production
+- **Document**: Keep your documentation up to date
+- **Test**: Test changes thoroughly before deploying
 
 **Happy Data Engineering!** 🚀
+
+---
+
+## 📞 SUPPORT
+
+If you encounter issues:
+
+1. Check the [Troubleshooting](#troubleshooting) section
+2. Review logs: `docker-compose logs` and script outputs
+3. Verify all prerequisites are met
+4. Check service health: `python scripts/utils/monitoring.py`
+5. Consult official documentation (links above)
+
+**Remember**: This is a learning project. Adapt it to your needs and scale gradually!
