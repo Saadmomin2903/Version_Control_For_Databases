@@ -468,7 +468,7 @@ S3_BUCKET=lakehouse
 
 # Nessie Configuration
 NESSIE_URI=http://localhost:19120/api/v2
-NESSIE_VERSION_STORE_TYPE=INMEMORY
+NESSIE_VERSION_STORE_TYPE=in-memory
 
 # Project Configuration
 NAMESPACE=ecommerce
@@ -627,7 +627,7 @@ services:
       - "${NESSIE_PORT:-19120}:19120"
     environment:
       QUARKUS_HTTP_PORT: 19120
-      NESSIE_VERSION_STORE_TYPE: ${NESSIE_VERSION_STORE_TYPE:-INMEMORY}
+      NESSIE_VERSION_STORE_TYPE: ${NESSIE_VERSION_STORE_TYPE:-in-memory}
     networks:
       - lakehouse-network
     healthcheck:
