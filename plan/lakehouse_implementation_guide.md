@@ -910,9 +910,9 @@ def setup_minio():
     endpoint = S3_ENDPOINT.replace("http://", "").replace("https://", "")
     
     try:
-        # Initialize MinIO client
+        # Initialize MinIO client with named parameters
         client = Minio(
-            endpoint,
+            endpoint=endpoint,
             access_key=S3_ACCESS_KEY,
             secret_key=S3_SECRET_KEY,
             secure=False  # Set to True for HTTPS
@@ -920,17 +920,26 @@ def setup_minio():
         
         print(f"✓ Connected to MinIO at {S3_ENDPOINT}")
         
-        # Check if bucket exists
-        if client.bucket_exists(S3_BUCKET):
+        # Check if bucket exists - FIXED: use bucket_name parameter
+        if client.bucket_exists(bucket_name=S3_BUCKET):
             print(f"✓ Bucket '{S3_BUCKET}' already exists")
-else:
-            # Create bucket
-            client.make_bucket(S3_BUCKET)
+        else:
+            # Create bucket - FIXED: use bucket_name parameter
+            client.make_bucket(bucket_name=S3_BUCKET)
             print(f"✓ Created bucket: {S3_BUCKET}")
         
         # Verify bucket is accessible
-        if client.bucket_exists(S3_BUCKET):
+        if client.bucket_exists(bucket_name=S3_BUCKET):
             print(f"✓ Bucket '{S3_BUCKET}' is accessible")
+            
+            # List all buckets
+            print("\n" + "=" * 60)
+            print("AVAILABLE BUCKETS")
+            print("=" * 60)
+            buckets = client.list_buckets()
+            for bucket in buckets:
+                print(f"  - {bucket.name}")
+            
             return True
         else:
             print(f"✗ Failed to verify bucket '{S3_BUCKET}'")
@@ -1062,6 +1071,10 @@ if __name__ == "__main__":
 source venv/bin/activate  # Linux/Mac
 # OR
 venv\Scripts\activate     # Windows
+
+pip install requests
+
+python -m pip install pyiceberg
 
 # Setup MinIO bucket
 python scripts/utils/setup_minio.py
