@@ -992,14 +992,14 @@ def create_branch(branch_name, base_branch="main"):
             headers={"Content-Type": "application/json"},
             timeout=10
         )
-    
-    if response.status_code in [200, 201]:
-        print(f"✓ Created branch: {branch_name}")
+        
+        if response.status_code in [200, 201]:
+            print(f"✓ Created branch: {branch_name}")
             return True
-    elif response.status_code == 409:
+        elif response.status_code == 409:
             print(f"✓ Branch '{branch_name}' already exists")
             return True
-    else:
+        else:
             print(f"✗ Failed to create branch '{branch_name}': {response.status_code}")
             print(f"  Response: {response.text}")
             return False
@@ -1011,8 +1011,8 @@ def list_branches():
     """List all Nessie branches"""
     try:
         response = requests.get(f"{NESSIE_URI}/trees", timeout=10)
-if response.status_code == 200:
-    branches = response.json().get("references", [])
+        if response.status_code == 200:
+            branches = response.json().get("references", [])
             return branches
         return []
     except Exception as e:
