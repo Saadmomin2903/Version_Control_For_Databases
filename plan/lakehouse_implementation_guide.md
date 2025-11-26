@@ -48,7 +48,7 @@ Before starting this project, you should understand these concepts. Don't worry 
 ### 🎯 Essential Concepts (Must Know)
 
 #### 1. **Python Programming**
-**Why**: All scripts are written in Python
+**Why**: All scripts are written in PYTHON
 
 **What to Know:**
 - Basic Python syntax (variables, functions, classes)
