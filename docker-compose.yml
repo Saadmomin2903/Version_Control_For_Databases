@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
     container_name: lakehouse-minio
     ports:
       - "${MINIO_API_PORT:-9000}:9000"
@@ -13,6 +11,16 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - lakehouse-network
     healthcheck:
@@ -23,26 +31,76 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: lakehouse-postgres
+    environment:
+      POSTGRES_DB: nessie
+      POSTGRES_USER: nessie
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+    volumes:
+      - nessie-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - lakehouse-network
+    restart: unless-stopped
+
   nessie:
-    image: projectnessie/nessie:latest
+    # FIXED: Use Docker Hub for Nessie 0.70.0 (earliest available)
+    image: projectnessie/nessie:0.70.0
     container_name: lakehouse-nessie
     ports:
       - "${NESSIE_PORT:-19120}:19120"
     environment:
+      # HTTP Configuration
       QUARKUS_HTTP_PORT: 19120
-      NESSIE_VERSION_STORE_TYPE: ${NESSIE_VERSION_STORE_TYPE:-in-memory}
+      
+      # Version Store Type
+      NESSIE_VERSION_STORE_TYPE: ${NESSIE_VERSION_STORE_TYPE:-JDBC}
+      
+      # Database Connection
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/nessie
+      QUARKUS_DATASOURCE_USERNAME: nessie
+      QUARKUS_DATASOURCE_PASSWORD: ${QUARKUS_DATASOURCE_PASSWORD:-password123}
+      
+      # Database pool settings for better performance
+      QUARKUS_DATASOURCE_JDBC_MAX_SIZE: 20
+      QUARKUS_DATASOURCE_JDBC_MIN_SIZE: 5
+      
+      # Logging level
+      QUARKUS_LOG_LEVEL: INFO
+      QUARKUS_LOG_CATEGORY__ORG_PROJECTNESSIE__LEVEL: INFO
     networks:
       - lakehouse-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:19120/api/v2/config"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 15s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
 volumes:
   minio-data:
+    driver: local
+  nessie-db:
     driver: local
 
 networks:
