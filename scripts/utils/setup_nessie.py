@@ -53,11 +53,11 @@ def create_branch(branch_name, source_name="main", source_hash=None):
     # sourceRefName/sourceHash when branching from an existing ref.
     # Nessie expects a CreateReference payload wrapper named `createReference`
     payload = {
-        "createReference": {
-            "name": branch_name,
-            "type": "BRANCH"
-        }
-    }
+    "name": branch_name,
+    "type": "BRANCH",
+    "sourceRefName": source_name,
+    "sourceHash": source_hash
+    }   
 
     # Add sourceRefName/sourceHash for branching from main
     if source_name:
