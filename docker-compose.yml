@@ -35,13 +35,13 @@ services:
     image: postgres:16-alpine
     container_name: lakehouse-postgres
     environment:
-      POSTGRES_DB: nessie
-      POSTGRES_USER: nessie
+      POSTGRES_USER: admin
+      POSTGRES_DB: metastore
       POSTGRES_PASSWORD: password123
     volumes:
       - nessie-db:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U nessie -d nessie" ]
+      test: [ "CMD-SHELL", "pg_isready -U admin -d metastore" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -55,16 +55,26 @@ services:
     restart: unless-stopped
 
   nessie:
-    image: projectnessie/nessie
+    # Nessie - Git-like catalog with PostgreSQL persistence
+    image: projectnessie/nessie:0.67.0
     container_name: lakehouse-nessie
     ports:
       - "19120:19120"
+    environment:
+      # Use JDBC version store with PostgreSQL (PERSISTENT!)
+      - NESSIE_VERSION_STORE_TYPE=JDBC
+      - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres:5432/metastore
+      - QUARKUS_DATASOURCE_USERNAME=admin
+      - QUARKUS_DATASOURCE_PASSWORD=password123
+      - QUARKUS_HTTP_PORT=19120
     networks:
       - lakehouse-network
+    depends_on:
+      - postgres
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:19120/api/v2/config" ]
-      interval: 30s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 5
       start_period: 45s
     restart: unless-stopped
