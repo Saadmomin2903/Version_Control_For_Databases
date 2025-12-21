@@ -15,13 +15,15 @@ This project implements a **Git-like version control system for databases** usin
 - **MinIO**: S3-compatible object storage
 - **Docker**: Containerized infrastructure
 
-### Architecture Pattern: Medallion Architecture
+### Architecture Pattern: Production-Grade Medallion Architecture
 
 ```
-Bronze Layer (Raw)  →  Silver Layer (Cleaned)  →  Gold Layer (Aggregated)
-     ↓                        ↓                          ↓
-  bronze branch          silver branch               main branch
+Bronze Layer (Raw)  →  Silver Layer (Cleaned)  →  Gold Layer (Staging)  →  Production
+     ↓                        ↓                          ↓                      ↓
+  bronze branch          silver branch             gold branch            main branch
 ```
+
+**Key Feature**: 4-branch architecture with gold as staging environment before production release.
 
 ---
 
@@ -49,7 +51,9 @@ Version_Control_For_Databases/
 │   │   └── aggregate_customer_summary_gold.py
 │   └── utils/                # Helper utilities
 │       ├── create_nessie_branches.py
-│       └── quality_checks.py
+│       ├── quality_checks.py
+│       ├── promote_to_production.py  # Merge gold → main
+│       └── rollback_production.py    # Recovery script
 ├── config/                   # Configuration files
 ├── notebooks/                # Jupyter notebooks
 ├── orchestration/            # Workflow orchestration
@@ -511,14 +515,17 @@ if email_validity_rate < 95:
 
 **Purpose**: Creates business-ready customer metrics by joining silver tables.
 
+**⚠️ PRODUCTION-GRADE CHANGE**: This script now writes to the **gold branch** (staging), NOT directly to production!
+
 **Detailed Code Explanation**:
 
 ```python
 # 1. Configuration (Line 40)
-.set('spark.sql.catalog.nessie.ref', 'main')
+.set('spark.sql.catalog.nessie.ref', 'gold')  # Writes to staging
 ```
-- Gold layer writes to `main` branch (production)
+- Gold layer writes to `gold` branch (staging environment)
 - Reads from `silver` branch using `@silver` syntax
+- Requires explicit promotion to main for production release
 
 ```python
 # 2. Reading Silver Tables (Lines 59-67)
@@ -655,19 +662,19 @@ customer_summary.select(
 - Identifies VIP customers
 - Supports account management strategies
 
-**Write to Production**:
+**Write to Staging (Gold Branch)**:
 
 ```python
-# 13. Write to Main Branch (Lines 169-174)
+# 13. Write to Gold Branch (Lines 169-174)
 spark.sql("""
-    CREATE OR REPLACE TABLE nessie.ecommerce.customer_summary
+    CREATE OR REPLACE TABLE nessie.ecommerce.`customer_summary@gold`
     USING iceberg
     AS SELECT * FROM customer_summary_temp
 """)
 ```
-- **No @branch syntax**: Writes to default branch (main)
-- Production-ready gold table
-- Accessible to BI tools
+- **@gold syntax**: Writes to gold branch (staging)
+- NOT in production yet
+- Requires promotion to main: `python3 scripts/utils/promote_to_production.py`
 
 **Business KPIs**:
 
@@ -791,6 +798,110 @@ for branch_name in BRANCHES:
 
 ---
 
+### scripts/utils/promote_to_production.py
+
+**Purpose**: Safely promote gold branch (staging) to main (production).
+
+**⚠️ NEW PRODUCTION SCRIPT**: Part of the production-grade workflow.
+
+**Functionality**:
+
+```python
+def merge_to_main():
+    # Get branch hashes
+    main_hash = get_branch_hash("main")
+    gold_hash = get_branch_hash("gold")
+    
+    # Confirm with user
+    confirm = input("Continue? (yes/no): ")
+    
+    # Perform merge
+    merge_response = requests.post(
+        f"{NESSIE_URL}/trees/branch/main/merge",
+        json={
+            "fromRefName":"gold",
+            "fromHash": gold_hash,
+            "message": "Promote gold aggregations to production"
+        }
+    )
+```
+
+**What It Does**:
+1. Retrieves current commit hashes for main and gold branches
+2. Displays branch information
+3. Requires explicit confirmation from user
+4. Merges gold branch into main using Nessie API
+5. Validates merge success
+
+**Usage**:
+```bash
+python3 scripts/utils/promote_to_production.py
+```
+
+**When to Use**:
+- After running gold aggregation script
+- After reviewing staging data on gold branch
+- When ready to release to production
+
+**Safety Features**:
+- Confirmation prompt prevents accidental promotions
+- Shows branch hashes for audit trail
+- Clear success/failure messaging
+
+---
+
+### scripts/utils/rollback_production.py
+
+**Purpose**: Quick recovery if production release has issues.
+
+**⚠️ NEW PRODUCTION SCRIPT**: Disaster recovery utility.
+
+**Functionality**:
+
+```python
+def rollback():
+    # Get recent commits on main
+    commits = list_commits("main")
+    
+    # Display options
+    for i, entry in enumerate(commits[:5]):
+        print(f"{i}. {commit_hash[:8]}... - {message}")
+    
+    # User selects target
+    choice = input("Rollback to which commit? ")
+    
+    # Assign main branch to target commit
+    requests.put(
+        f"{NESSIE_URL}/trees/branch/main",
+        json={"hash": target_hash}
+    )
+```
+
+**What It Does**:
+1. Lists recent commits on main branch
+2. Shows commit messages and timestamps
+3. Allows selecting previous good state
+4. Instantly points main branch to selected commit
+5. **No data reprocessing required!**
+
+**Usage**:
+```bash
+python3 scripts/utils/rollback_production.py
+```
+
+**When to Use**:
+- Production data has issues
+- Users report incorrect metrics
+- Need to quickly restore previous good state
+
+**Benefits**:
+- Recovery in seconds (not hours)
+- No pipeline re-run needed
+- Can rollback to any previous commit
+- Preserves all commit history
+
+---
+
 ### scripts/utils/quality_checks.py
 
 **Purpose**: Reusable data quality validation framework.
@@ -903,6 +1014,58 @@ def validate(self, raise_on_failure=True):
 - **Fail-Fast**: Stops pipeline on quality issues
 - **Prevents**: Bad data from reaching gold layer
 - **Enables**: Audit trail of what failed
+
+---
+
+## 🎯 Production-Grade Workflow
+
+### Overview
+
+The lakehouse now implements a **4-branch production workflow**:
+
+```
+bronze (raw) → silver (validated) → gold (staging) → main (production)
+```
+
+### Daily Operations
+
+**Step 1**: Run pipeline to staging
+```bash
+# Data goes to gold branch (NOT production yet)
+docker exec lakehouse-spark python3 /home/jovyan/scripts/gold/aggregate_customer_summary_gold.py
+```
+
+**Step 2**: Review staging data
+```sql
+SELECT * FROM nessie.ecommerce.`customer_summary@gold` LIMIT 10
+```
+
+**Step 3**: Promote to production (when approved)
+```bash
+python3 scripts/utils/promote_to_production.py
+```
+
+**Step 4**: Rollback if needed
+```bash
+python3 scripts/utils/rollback_production.py
+```
+
+### Key Benefits
+
+| Feature | Benefit |
+|---------|---------|
+| **Staging Environment** | Test aggregations before users see them |
+| **Approval Workflow** | Explicit promotion required for production |
+| **Quick Rollback** | Recovery in seconds, not hours |
+| **Audit Trail** | Full commit history preserved |
+| **Risk Reduction** | Bad data doesn't reach production |
+
+### Branch Isolation
+
+- **bronze**: Immutable raw data (audit trail)
+- **silver**: Reprocessable validated data
+- **gold**: Staging environment for testing
+- **main**: Production data (BI tools query this)
 
 ---
 

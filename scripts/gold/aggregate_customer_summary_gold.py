@@ -2,7 +2,7 @@
 Gold Layer - Customer Summary Aggregation
 
 Joins customers_silver and orders_silver to create business-ready customer metrics
-Writes to main branch (Gold = Production)
+Writes to gold branch (staging) - requires promotion to main for production release
 """
 
 import os
@@ -37,7 +37,7 @@ conf = (
              'org.projectnessie.spark.extensions.NessieSparkSessionExtensions')
         .set('spark.sql.catalog.nessie', 'org.apache.iceberg.spark.SparkCatalog')
         .set('spark.sql.catalog.nessie.uri', NESSIE_URI)
-        .set('spark.sql.catalog.nessie.ref', 'main')  # Write to main (Gold = production)
+        .set('spark.sql.catalog.nessie.ref', 'gold')  # Write to gold (staging before production)
         .set('spark.sql.catalog.nessie.authentication.type', 'NONE')
         .set('spark.sql.catalog.nessie.catalog-impl', 'org.apache.iceberg.nessie.NessieCatalog')
         .set('spark.sql.catalog.nessie.warehouse', WAREHOUSE)
@@ -152,7 +152,7 @@ customer_summary.select(
 
 print("")
 
-print("💾 Step 5: Writing to MAIN branch (Gold/Production)...")
+print("💾 Step 5: Writing to GOLD branch (Staging)...")
 print("-" * 70)
 
 # Create temp view
@@ -165,18 +165,18 @@ try:
 except:
     pass
 
-# Write to main branch (Gold = production)
-print(f"✓ Writing {total_customers} customer summaries to main branch...")
+# Write to gold branch (staging area)
+print(f"✓ Writing {total_customers} customer summaries to gold branch...")
 spark.sql("""
-    CREATE OR REPLACE TABLE nessie.ecommerce.customer_summary
+    CREATE OR REPLACE TABLE nessie.ecommerce.`customer_summary@gold`
     USING iceberg
     AS SELECT * FROM customer_summary_temp
 """)
-print("✓ Table created on main branch")
+print("✓ Table created on gold branch (staging)")
 
 # Verify the write
-verify_count = spark.sql("SELECT COUNT(*) as cnt FROM nessie.ecommerce.customer_summary").collect()[0]['cnt']
-print(f"✓ Verified: {verify_count} records in customer_summary")
+verify_count = spark.sql("SELECT COUNT(*) as cnt FROM nessie.ecommerce.`customer_summary@gold`").collect()[0]['cnt']
+print(f"✓ Verified: {verify_count} records in customer_summary on gold branch")
 
 # Calculate key business metrics
 business_metrics = spark.sql("""
@@ -207,8 +207,19 @@ print("=" * 70)
 print("")
 print("Summary:")
 print(f"  📥 Input:  {customers_count} customers + {orders_count} orders from silver")
-print(f"  📤 Output: {verify_count} customer summaries on main branch")
+print(f"  📤 Output: {verify_count} customer summaries on GOLD branch (staging)")
 print(f"  💰 Total Revenue: ${business_metrics['total_revenue']:,.2f}")
 print(f"  📊 Customer Segments: Premium, Gold, Silver, Bronze, No Orders")
-print(f"  🎯 Ready for: BI tools, dashboards, analytics")
+print("")
+print("⚠️  STAGING ENVIRONMENT - NOT YET IN PRODUCTION!")
+print("=" * 70)
+print("")
+print("Next Steps:")
+print("  1. Review data on gold branch:")
+print("     SELECT * FROM nessie.ecommerce.`customer_summary@gold` LIMIT 10")
+print("")
+print("  2. If approved, promote to production:")
+print("     python3 scripts/utils/promote_to_production.py")
+print("")
+print("  3. Production users will then see data on main branch")
 print("=" * 70)
