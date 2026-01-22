@@ -39,6 +39,7 @@ Thumbs.db
 
 # SSH Keys (NEVER commit these!)
 key/
+key2/
 *.key
 *.pem
 oracle-*.key
