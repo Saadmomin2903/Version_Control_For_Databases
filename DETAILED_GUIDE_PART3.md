@@ -947,10 +947,120 @@ http://140.238.224.207:19120/api/v2/config
 
 ---
 
-## Next: Part 4 - Complete Pipeline
+## Step 12: Deploy Docker on VM2 (Spark Worker)
+
+### Step 12.1: SSH to VM2
+
+```bash
+ssh -i ~/.ssh/oracle-vm2.key ubuntu@140.245.16.49
+```
+
+### Step 12.2: Install Docker (Same as VM1)
+
+```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+# Press Tab + Enter if prompted about services
+
+# Install Docker
+sudo apt install -y docker.io
+
+# Enable and start Docker
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# Add user to docker group
+sudo usermod -aG docker ubuntu
+
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.23.3/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Verify
+docker-compose --version
+```
+
+**Logout and login again**:
+```bash
+exit
+ssh -i ~/.ssh/oracle-vm2.key ubuntu@140.245.16.49
+```
+
+### Step 12.3: Clone Repository
+
+```bash
+cd /home/ubuntu
+git clone https://github.com/Saadmomin2903/Version_Control_For_Databases.git
+cd Version_Control_For_Databases
+```
+
+### Step 12.4: Create .env File for VM2
+
+VM2 connects to Nessie on VM1, so use VM1's IP address:
+
+```bash
+cat > .env << 'EOF'
+# Oracle Storage
+ORACLE_NAMESPACE=bmcfe6z38foz
+ORACLE_ACCESS_KEY=962c9f862226831e4edea90cfcfafb8a8dffcd51
+ORACLE_SECRET_KEY=sd2rGU918DTmn35E4xJ8EV7BX2XUt7DkqC8v6WDNDUw=
+ORACLE_ENDPOINT=https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com
+ORACLE_REGION=ap-mumbai-1
+WAREHOUSE=s3a://lakehouse-prod/warehouse
+
+# Nessie (point to VM1)
+NESSIE_URI=http://140.238.224.207:19120/api/v1
+EOF
+```
+
+### Step 12.5: Start Spark Worker Container
+
+For VM2, we just run a Spark worker that connects to VM1's master:
+
+```bash
+# Run Spark worker pointing to VM1's Spark master
+docker run -d \
+    --name spark-worker \
+    -e SPARK_MASTER=spark://140.238.224.207:7077 \
+    -p 8082:8081 \
+    alexmerced/spark33-notebook
+```
+
+**Verify**:
+```bash
+docker ps
+# Should show spark-worker running
+```
+
+### Step 12.6: Verify Connection to VM1
+
+```bash
+# Test Nessie connection from VM2
+curl http://140.238.224.207:19120/api/v2/config
+```
+
+---
+
+## ✅ Both VMs Deployed!
+
+| VM | Public IP | Services |
+|----|-----------|----------|
+| VM1 (airflow-nessie) | 140.238.224.207 | Nessie, Spark Master, Jupyter, PostgreSQL |
+| VM2 (spark-worker) | 140.245.16.49 | Spark Worker |
+
+**Access Points**:
+```
+Jupyter: http://140.238.224.207:8888
+Spark UI: http://140.238.224.207:8081
+Nessie API: http://140.238.224.207:19120/api/v2/config
+```
+
+---
+
+## Next: Part 4 - Run the Pipeline
 
 **Continue to DETAILED_GUIDE_PART4.md for**:
-1. ⭐ Setup VM2 with Spark workers
-2. ⭐ Upload parquet data to Oracle Storage
-3. ⭐ Run the Bronze → Silver → Gold pipeline
-4. ⭐ Query data with Nessie branches
+1. ⭐ Upload parquet data to Oracle Storage
+2. ⭐ Run the Bronze → Silver → Gold pipeline
+3. ⭐ Query data with Nessie branches
+4. ⭐ Test time-travel queries
