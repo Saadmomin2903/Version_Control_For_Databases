@@ -624,9 +624,11 @@ Where from:
 
 **Prompt 3: Default region**:
 ```
-Default region name [None]: us-ashburn-1
+Default region name [None]: ap-mumbai-1
 
-⚠️ IMPORTANT: Use Oracle region, not AWS region!
+⚠️ IMPORTANT: Use YOUR Oracle region!
+For Mumbai: ap-mumbai-1
+For Ashburn: us-ashburn-1
 ```
 
 **Prompt 4: Default output format**:
@@ -650,11 +652,12 @@ Configuration saved to:
 
 **List buckets**:
 ```bash
+# For Mumbai region:
 aws s3 ls \
-    --endpoint-url https://objectstorage.us-ashburn-1.oraclecloud.com
+    --endpoint-url https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com
 
 # Expected output:
-# 2024-01-19 10:30:45 lakehouse-prod
+# 2026-01-22 13:15:45 lakehouse-prod
 ```
 
 **Test upload**:
@@ -664,7 +667,7 @@ echo "Hello from local machine!" > test.txt
 
 # Upload to Oracle
 aws s3 cp test.txt s3://lakehouse-prod/ \
-    --endpoint-url https://objectstorage.us-ashburn-1.oraclecloud.com
+    --endpoint-url https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com
 
 # Expected output:
 # upload: ./test.txt to s3://lakehouse-prod/test.txt
@@ -673,10 +676,10 @@ aws s3 cp test.txt s3://lakehouse-prod/ \
 **Verify upload**:
 ```bash
 aws s3 ls s3://lakehouse-prod/ \
-    --endpoint-url https://objectstorage.us-ashburn-1.oraclecloud.com
+    --endpoint-url https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com
 
 # Should show:
-# 2024-01-19 11:45:12    28 test.txt
+# 2026-01-22 13:45:12    28 test.txt
 ```
 
 **✅ Success indicators**:
@@ -695,44 +698,65 @@ aws s3 ls s3://lakehouse-prod/ \
 ✓ Supabase account created
 ✓ PostgreSQL database configured (500 MB free)
 ✓ Database connection tested
-✓ Firebolt dataset downloaded (52 GB)
-✓ All files decompressed
+✓ Firebolt ecommerce dataset downloaded (~5 GB parquet)
 ✓ AWS CLI configured for Oracle Storage
-✓ Oracle S3 connection tested
 ```
 
 **What you have now**:
 ```
 Databases:
   - Supabase PostgreSQL (for Nessie metadata)
-  - Connection string saved
+  - Host: db.vxpwataohydyzegvbxws.supabase.co
+  - Connection string saved in SUPABASE_INFO.md
 
 Data:
-  - transactions.csv (412M records, 52 GB)
-  - users.csv (2.5M records, 1.2 GB)
-  - products.csv (125k records, 200 MB)
-  - sessions.csv (85M records, 15 GB)
+  - ~1000 parquet files (~5 GB compressed)
+  - ~400 million transaction records
+  - Ready for Spark processing (no decompression needed)
 
 Storage:
   - Oracle bucket: lakehouse-prod
-  - S3 access configured
+  - Namespace: bmcfe6z38foz
+  - Region: ap-mumbai-1
+  - S3-compatible endpoint configured
 ```
 
 **Files created**:
 ```
-~/supabase-credentials.txt
+~/supabase-credentials.txt (or SUPABASE_INFO.md)
 ~/oracle-s3-credentials.txt
-~/Documents/Version_Control_For_Databases/data/firebolt-raw/*.csv
+~/Documents/Version_Control_For_Databases/data/firebolt-raw/*.parquet
 ```
 
 **Total cost so far**: Still **$0.00** ✅
 
-**What's next in Part 4**:
-- Upload data to Oracle Storage
-- Deploy Docker containers on VMs
-- Configure processing scripts
-- Run production pipeline
+---
+
+## Next Steps: Part 4 - Docker Deployment
+
+**What's next**:
+1. ⭐ SSH to VM1 and install Docker
+2. ⭐ SSH to VM2 and install Docker
+3. ⭐ Deploy Nessie + Airflow containers on VM1
+4. ⭐ Deploy Spark containers on VM2
+5. ⭐ Upload parquet data to Oracle Storage
+6. ⭐ Run production pipeline
+
+**Quick start commands for Part 4**:
+
+```bash
+# SSH to VM1
+ssh -i ~/.ssh/oracle-vm1.key ubuntu@140.238.224.207
+
+# Install Docker on VM1
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y docker.io docker-compose-plugin
+sudo usermod -aG docker ubuntu
+
+# Logout and login again for docker group
+exit
+```
 
 ---
 
-**Continue to DETAILED_GUIDE_PART4.md for final deployment!**
+**Continue to DETAILED_GUIDE_PART4.md for Docker deployment!**
