@@ -661,16 +661,22 @@ aws s3 ls \
 ```
 
 **Test upload**:
+
+**⚠️ NOTE**: AWS CLI `s3 cp` has a compatibility issue with Oracle S3. Use curl instead:
+
 ```bash
 # Create test file
 echo "Hello from local machine!" > test.txt
 
-# Upload to Oracle
-aws s3 cp test.txt s3://lakehouse-prod/ \
-    --endpoint-url https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com
+# Upload using curl (works reliably with Oracle)
+curl -X PUT \
+    -T test.txt \
+    -H "Content-Type: text/plain" \
+    --aws-sigv4 "aws:amz:ap-mumbai-1:s3" \
+    --user "[YOUR_ACCESS_KEY]:[YOUR_SECRET_KEY]" \
+    "https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com/lakehouse-prod/test.txt"
 
-# Expected output:
-# upload: ./test.txt to s3://lakehouse-prod/test.txt
+# No output = success!
 ```
 
 **Verify upload**:
@@ -679,13 +685,13 @@ aws s3 ls s3://lakehouse-prod/ \
     --endpoint-url https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com
 
 # Should show:
-# 2026-01-22 13:45:12    28 test.txt
+# 2026-01-22 17:10:00    26 test.txt
 ```
 
 **✅ Success indicators**:
 ```
 ✓ Bucket listed without errors
-✓ File uploaded successfully
+✓ File uploaded successfully (curl returns no error)
 ✓ File visible in listing
 ```
 
@@ -732,31 +738,181 @@ Storage:
 
 ---
 
-## Next Steps: Part 4 - Docker Deployment
+## Step 11: Deploy Docker on VM1
 
-**What's next**:
-1. ⭐ SSH to VM1 and install Docker
-2. ⭐ SSH to VM2 and install Docker
-3. ⭐ Deploy Nessie + Airflow containers on VM1
-4. ⭐ Deploy Spark containers on VM2
-5. ⭐ Upload parquet data to Oracle Storage
-6. ⭐ Run production pipeline
-
-**Quick start commands for Part 4**:
+### Step 11.1: SSH to VM1
 
 ```bash
-# SSH to VM1
 ssh -i ~/.ssh/oracle-vm1.key ubuntu@140.238.224.207
+```
 
-# Install Docker on VM1
+### Step 11.2: Install Docker
+
+```bash
+# Update system
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y docker.io docker-compose-plugin
+# Press Tab + Enter if prompted about services
+
+# Install Docker
+sudo apt install -y docker.io
+
+# Enable and start Docker
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# Add user to docker group
 sudo usermod -aG docker ubuntu
 
-# Logout and login again for docker group
+# Install Docker Compose standalone
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.23.3/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Verify
+docker-compose --version
+# Should show: Docker Compose version v2.23.3
+```
+
+**Logout and login again** to apply docker group:
+```bash
 exit
+ssh -i ~/.ssh/oracle-vm1.key ubuntu@140.238.224.207
+```
+
+### Step 11.3: Clone Repository and Setup
+
+```bash
+cd /home/ubuntu
+git clone https://github.com/Saadmomin2903/Version_Control_For_Databases.git
+cd Version_Control_For_Databases
+```
+
+### Step 11.4: Install Local PostgreSQL
+
+**⚠️ IMPORTANT**: Supabase only provides IPv6 addresses, and Oracle VMs don't support IPv6.
+The solution is to install PostgreSQL locally on the VM.
+
+```bash
+# Install PostgreSQL
+sudo apt install -y postgresql postgresql-contrib
+
+# Start and enable
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Create database for Nessie
+sudo -u postgres psql -c "CREATE DATABASE nessie;"
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'nessie123';"
+```
+
+### Step 11.5: Configure PostgreSQL for Docker
+
+Docker containers can't connect to localhost - they need to use the Docker gateway IP.
+
+```bash
+# Allow Docker networks to connect
+sudo bash -c 'echo "host    all    all    172.18.0.0/16    md5" >> /etc/postgresql/14/main/pg_hba.conf'
+sudo bash -c 'echo "host    all    all    172.17.0.0/16    md5" >> /etc/postgresql/14/main/pg_hba.conf'
+sudo bash -c 'echo "host    all    all    10.0.0.0/24    md5" >> /etc/postgresql/14/main/pg_hba.conf'
+
+# Configure PostgreSQL to listen on all interfaces
+sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /etc/postgresql/14/main/postgresql.conf
+
+# Open firewall
+sudo iptables -I INPUT -p tcp --dport 5432 -j ACCEPT
+
+# Restart PostgreSQL
+sudo systemctl restart postgresql
+```
+
+### Step 11.6: Create .env File
+
+```bash
+cd /home/ubuntu/Version_Control_For_Databases
+
+# Create .env
+cat > .env << 'EOF'
+# Supabase (using local PostgreSQL instead)
+SUPABASE_HOST=localhost
+SUPABASE_PASSWORD=nessie123
+SUPABASE_JDBC_URL=jdbc:postgresql://172.18.0.1:5432/nessie?user=postgres&password=nessie123
+
+# Oracle
+ORACLE_NAMESPACE=bmcfe6z38foz
+ORACLE_ACCESS_KEY=962c9f862226831e4edea90cfcfafb8a8dffcd51
+ORACLE_SECRET_KEY=sd2rGU918DTmn35E4xJ8EV7BX2XUt7DkqC8v6WDNDUw=
+ORACLE_ENDPOINT=https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com
+ORACLE_REGION=ap-mumbai-1
+WAREHOUSE=s3a://lakehouse-prod/warehouse
+
+# Nessie
+NESSIE_URI=http://nessie:19120/api/v1
+EOF
+```
+
+### Step 11.7: Start Docker Containers
+
+```bash
+docker-compose -f docker-compose-production.yml up -d
+```
+
+**Wait 15 seconds, then verify**:
+```bash
+sleep 15
+docker ps
+
+# Should show:
+# lakehouse-nessie - healthy
+# lakehouse-spark - running
+```
+
+### Step 11.8: Verify Nessie API
+
+```bash
+curl http://localhost:19120/api/v2/config
+```
+
+**Expected output**:
+```json
+{
+  "defaultBranch" : "main",
+  "minSupportedApiVersion" : 1,
+  "maxSupportedApiVersion" : 2,
+  "actualApiVersion" : 2,
+  "specVersion" : "2.1.0"
+}
 ```
 
 ---
 
-**Continue to DETAILED_GUIDE_PART4.md for Docker deployment!**
+## ✅ Part 3 Complete!
+
+**What you've accomplished**:
+```
+✓ Supabase account created
+✓ Firebolt dataset downloaded (~5 GB parquet)
+✓ AWS CLI configured for Oracle Storage
+✓ Docker installed on VM1
+✓ PostgreSQL installed on VM1 (for Nessie catalog)
+✓ Nessie + Spark containers running
+```
+
+**Running Services on VM1**:
+| Service | Port | Status |
+|---------|------|--------|
+| Nessie API | 19120 | ✅ Running |
+| Spark Master | 7077 | ✅ Running |
+| Spark UI | 8081 | ✅ Running |
+| Jupyter | 8888 | ✅ Running |
+| PostgreSQL | 5432 | ✅ Running |
+
+**Total cost so far**: Still **$0.00** ✅
+
+---
+
+## Next: Part 4 - Complete Pipeline
+
+**Continue to DETAILED_GUIDE_PART4.md for**:
+1. ⭐ Setup VM2 with Spark workers
+2. ⭐ Upload parquet data to Oracle Storage
+3. ⭐ Run the Bronze → Silver → Gold pipeline
+4. ⭐ Query data with Nessie branches
