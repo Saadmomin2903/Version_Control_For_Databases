@@ -884,6 +884,44 @@ curl http://localhost:19120/api/v2/config
 
 ---
 
+### Step 11.9: Access Web UIs
+
+**Get Jupyter Token** (run on VM1):
+```bash
+docker logs lakehouse-spark 2>&1 | grep token
+```
+
+**Access Jupyter Notebook**:
+```
+http://140.238.224.207:8888/?token=[YOUR-TOKEN]
+```
+
+Or paste the token in the login page.
+
+**Access Spark UI**:
+```
+http://140.238.224.207:8081
+```
+
+**⚠️ If connection refused**, open ports in Oracle Cloud:
+
+1. Oracle Console → Networking → Virtual Cloud Networks
+2. Click your VCN → Security Lists → Default Security List
+3. Add Ingress Rules:
+
+| Source CIDR | Protocol | Port |
+|-------------|----------|------|
+| 0.0.0.0/0 | TCP | 8081 |
+| 0.0.0.0/0 | TCP | 8888 |
+| 0.0.0.0/0 | TCP | 19120 |
+
+**Test Nessie API from browser**:
+```
+http://140.238.224.207:19120/api/v2/config
+```
+
+---
+
 ## ✅ Part 3 Complete!
 
 **What you've accomplished**:
