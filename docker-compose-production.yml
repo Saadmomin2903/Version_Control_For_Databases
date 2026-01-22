@@ -78,7 +78,7 @@ networks:
 # REMOVED: Local volumes (minio-data, nessie-db)
 # Data now stored in Oracle Object Storage and Supabase
 
----
+#---
 
 # Environment Variables Required (.env.prod):
 #

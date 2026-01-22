@@ -36,3 +36,10 @@ Thumbs.db
 
 # Docker
 .dockerignore
+
+# SSH Keys (NEVER commit these!)
+key/
+*.key
+*.pem
+oracle-*.key
+ssh-key-*

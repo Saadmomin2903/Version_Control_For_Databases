@@ -184,34 +184,37 @@ Modal popup: "Browse All Images"
 **What you'll see**:
 List of Ubuntu versions:
 ```
-Name                          Architecture
-────────────────────────────────────────────
-Canonical Ubuntu 20.04         x86, ARM
-Canonical Ubuntu 22.04         x86, ARM ← choose this
-Canonical Ubuntu 24.04         x86, ARM
+Name                              Architecture
+──────────────────────────────────────────────────
+Canonical Ubuntu 20.04            x86
+Canonical Ubuntu 20.04 Minimal    x86
+Canonical Ubuntu 22.04            x86 ← RECOMMENDED
+Canonical Ubuntu 22.04 Minimal aarch64  ARM
+Canonical Ubuntu 24.04            x86
 ```
 
 **Which one to select**:
 ```
-Choose: Canonical Ubuntu 22.04
-Architecture: ARM (more CPU for free tier!)
+⚠️ IMPORTANT: ARM VMs often have NO CAPACITY in many regions!
+
+Recommended: Canonical Ubuntu 22.04 (x86 version)
+
+Why x86 instead of ARM:
+  ✓ ARM (A1.Flex) often shows "Out of capacity" error
+  ✓ x86 shapes (E5.Flex) are more available
+  ✓ Same functionality, just different CPU architecture
+  ✓ Mumbai region especially has ARM capacity issues
 
 Why Ubuntu 22.04:
   ✓ LTS (Long Term Support = stable)
   ✓ Compatible with all our software
   ✓ Well-documented
-  ✓ Community support
-
-Why ARM:
-  ✓ Oracle gives MORE free resources for ARM
-  ✓ 4 OCPU vs 2 OCPU for x86
-  ✓ Faster performance
-  ✓ Modern architecture
+  ✓ Docker works perfectly
 ```
 
 **How to select**:
-1. Click the **radio button** next to "Canonical Ubuntu 22.04"
-2. Make sure you see "(ARM)" in the name
+1. Click the **radio button** next to "Canonical Ubuntu 22.04" (x86 version)
+2. **Do NOT select "aarch64" or "Minimal aarch64"** (those are ARM)
 3. Click **"Select Image"** button at bottom
 
 **What happens**:
@@ -241,94 +244,75 @@ Modal: "Browse All Shapes"
 **Shape categories**:
 ```
 Left sidebar:
+  - AMD ← TRY THIS FIRST
+  - Intel
+  - Ampere (ARM - often NO capacity!)
   - Specialty and previous generation
-  - Bare metal
-  - Virtual machines ← expand this
 ```
 
-**What to do**:
-1. Expand **"Virtual machines"**
-2. Click **"Ampere"** (this is ARM architecture)
+**⚠️ IMPORTANT - ARM Capacity Issues**:
+```
+If you selected ARM image (aarch64) and try VM.Standard.A1.Flex,
+you may get this error:
+
+  "Out of capacity for shape VM.Standard.A1.Flex"
+
+This is COMMON, especially in Mumbai region!
+Solution: Use x86 image + AMD shape instead.
+```
+
+**RECOMMENDED: AMD Shape (Works Reliably)**:
+
+1. Click **"AMD"** in the left sidebar
+2. Select **VM.Standard.E5.Flex**
 
 **What you'll see**:
-List of Ampere shapes:
 ```
-Name                    OCPU  Memory  Network  Price/hr
-──────────────────────────────────────────────────────────
-VM.Standard.A1.Flex     1-80  1-512   1-40     $0.00 💚
-VM.Standard.A2.Flex     ...   ...     ...      $0.XX
-```
-
-**Which one to select**:
-```
-Choose: VM.Standard.A1.Flex
-Look for: "Always Free-eligible" badge (green)
+Name                    OCPU        Memory      
+──────────────────────────────────────────────────
+VM.Standard.E5.Flex     1 (126 max) 12 (2098 max)
+VM.Standard.E4.Flex     1 (114 max) 16 (1760 max)
 ```
 
-**Action**: Click **radio button** next to VM.Standard.A1.Flex
-
-**What appears below**:
-Configuration sliders!
-
-**Number of OCPUs**:
+**Configure E5.Flex**:
 ```
-What you'll see: Slider from 1 to 80
-What to set: 2
-How: 
-  - Drag slider to 2
-  - Or click in box and type "2"
-  
-What this means:
-  - 2 CPU cores
-  - Free tier gives you 4 total (we'll use 2 per VM)
-```
+OCPU: 1 (you can try 2, but 1 works fine)
+Memory: 12 GB
 
-**Amount of memory (GB)**:
-```
-What you'll see: Slider (range depends on CPU)
-What to set: 12
-How: Drag slider or type "12"
-
-Why 12 GB:
-  ✓ Max memory for 2 OCPU
-  ✓ Enough for Airflow + Nessie
-  ✓ Within free tier limits
+Note: E5.Flex uses free credits ($300 for 30 days)
+      Not "Always Free" but you won't be charged
+      if you stay within credits.
 ```
 
 **What the config looks like**:
 ```
 ┌──────────────────────────────────────┐
-│ VM.Standard.A1.Flex                  │
-│ ✅ Always Free-eligible              │
+│ VM.Standard.E5.Flex                  │
 ├──────────────────────────────────────┤
 │ Number of OCPUs                      │
-│ [==●--------] 2                      │
+│ [●----------] 1                      │
 │                                       │
 │ Amount of memory (GB)                │
 │ [======●----] 12                     │
 │                                       │
-│ Network bandwidth (Gbps): 2          │
-│                                       │
-│ Estimated cost: $0.00/hr             │
-│                                       │
-│ [Select Shape]                       │
+│ Network bandwidth (Gbps): 1          │
 └──────────────────────────────────────┘
 ```
 
-**Verify before clicking**:
+**Alternative: Try ARM First (If Available)**:
 ```
-✓ Shape: VM.Standard.A1.Flex
-✓ OCPU: 2
-✓ Memory: 12 GB
-✓ Price: $0.00/hr
-✓ "Always Free" badge visible
+If you want to try ARM (free forever):
+1. Click "Ampere" in sidebar
+2. Select VM.Standard.A1.Flex
+3. Set 2 OCPU, 12 GB
+4. If "Out of capacity" error → use E5.Flex above
 ```
 
 **Action**: Click **"Select Shape"** button
 
 **What happens**:
 - Modal closes
-- Shape section shows: "VM.Standard.A1.Flex (2 OCPU, 12 GB Memory)"
+- Shape section shows your selected shape
 
 ---
 
@@ -454,17 +438,19 @@ Less critical: But save it anyway
 
 **After downloading**:
 ```
-Rename the files for clarity:
+Rename and move the files:
 
 macOS/Linux Terminal:
 cd ~/Downloads
-mv ssh-key-*.key ~/.ssh/oracle-vm1.key
-mv ssh-key-*.key.pub ~/.ssh/oracle-vm1.key.pub
+
+# Move to .ssh folder (RECOMMENDED - avoids permission issues)
+sudo cat ssh-key-*.key > ~/.ssh/oracle-vm1.key
+cp ssh-key-*.key.pub ~/.ssh/oracle-vm1.key.pub
 chmod 600 ~/.ssh/oracle-vm1.key
 
-Windows (PowerShell):
-Move-Item ssh-key-*.key $HOME\.ssh\oracle-vm1.key
-Move-Item ssh-key-*.key.pub $HOME\.ssh\oracle-vm1.key.pub
+Verify:
+ls -la ~/.ssh/oracle-vm1.key
+# Should show: -rw------- (600 permissions)
 ```
 
 **✅ Verification**:
@@ -693,16 +679,34 @@ exit
 
 **If SSH fails**:
 ```
-Common issues:
+Common issues and FIXES:
 
 1. "Permission denied (publickey)"
-   Fix: chmod 600 ~/.ssh/oracle-vm1.key
+   Cause: Key file permissions wrong or owned by root
+   
+   Fix Step 1 - Copy key to .ssh folder:
+   sudo cat ~/path/to/your/key > ~/.ssh/oracle-vm1.key
+   
+   Fix Step 2 - Set permissions:
+   chmod 600 ~/.ssh/oracle-vm1.key
+   
+   Fix Step 3 - Retry SSH:
+   ssh -i ~/.ssh/oracle-vm1.key ubuntu@[IP]
 
-2. "Connection refused"
-   Fix: Wait 2-3 more minutes, VM still booting
+2. "Identity file not accessible: Permission denied"
+   Cause: File is owned by root after using sudo
+   
+   Fix:
+   sudo chown $USER ~/.ssh/oracle-vm1.key
+   chmod 600 ~/.ssh/oracle-vm1.key
 
-3. "Connection timed out"
-   Fix: Check security list has port 22 open
+3. "Connection refused"
+   Cause: VM still booting
+   Fix: Wait 2-3 more minutes
+
+4. "Connection timed out"
+   Cause: Security list missing port 22
+   Fix: Check VCN security list has port 22 ingress rule
 ```
 
 ---
