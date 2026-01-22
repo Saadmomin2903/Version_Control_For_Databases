@@ -43,4 +43,6 @@ key2/
 *.key
 *.pem
 oracle-*.key
-ssh-key-*
+ssh-key-*SUPABASE_INFO.md
+data/firebolt-raw/
+SUPABASE_INFO.md

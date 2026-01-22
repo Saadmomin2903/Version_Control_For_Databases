@@ -439,23 +439,24 @@ cd data/firebolt-raw
 
 # Check available disk space
 df -h .
-# Need at least 60 GB free (52 GB data + 8 GB temp)
+# Need at least 10 GB free (5 GB parquet + headroom)
 ```
 
 **What you'll see**:
 ```
 Filesystem      Size   Used  Avail Capacity
 /dev/disk1     500G   240G   260G    48%
-                              ^^^--- Need 60+ GB
+                              ^^^--- Need 10+ GB
 ```
 
-**If not enough space**:
-```
-Options:
-1. Free up space (delete old files, empty trash)
-2. Use external hard drive
-3. Download to different location
-```
+**Good news**: The Firebolt dataset is in **Parquet format** (~5 GB compressed)
+which is much smaller than the original CSV files!
+
+---
+
+### Step 9.2: Install AWS CLI
+
+**(Skip if already installed)**
 
 ---
 
@@ -503,183 +504,88 @@ aws --version
 
 ---
 
-### Step 9.3: Download Transactions Data
+### Step 9.3: Download Firebolt E-commerce Dataset (Parquet)
 
-**⚠️ This is the largest file (~40 GB compressed)**
+**⚠️ CORRECT BUCKET PATH** (verified working):
 
-**Start download**:
 ```bash
 # Make sure you're in the right directory
 pwd
 # Should show: .../Version_Control_For_Databases/data/firebolt-raw
 
-# Download transactions (this will take 1-2 hours!)
-aws s3 cp s3://firebolt-publishing-public/samples/e_commerce/transactions.csv.gz . \
-    --no-sign-request \
-    --only-show-errors \
-    --no-progress
-
-# Explanation of flags:
-# --no-sign-request: No AWS credentials needed
-# --only-show-errors: Quiet mode
-# --no-progress: Don't show progress bar (cleaner output)
+# Download ALL parquet files (~5 GB total, ~1000 files)
+aws s3 sync s3://firebolt-sample-datasets-public-us-east-1/ecommerce_primer/parquet/ . \
+    --no-sign-request
 ```
 
 **What you'll see**:
 ```
-# Command runs silently
-# No output = good (downloading in background)
-
-# To check progress in another terminal:
-ls -lh transactions.csv.gz
-# File size will grow: 100 MB, 500 MB, 1 GB, ...
+download: s3://firebolt.../ecommerce_1_2_0.gz.parquet to ./ecommerce_1_2_0.gz.parquet
+download: s3://firebolt.../ecommerce_1_2_1.gz.parquet to ./ecommerce_1_2_1.gz.parquet
+...
+(hundreds of files downloading)
 ```
 
 **Download time estimates**:
 ```
-100 Mbps connection: ~1 hour
-50 Mbps connection: ~2 hours
-25 Mbps connection: ~4 hours
-10 Mbps connection: ~10 hours (run overnight!)
+100 Mbps connection: ~15-20 minutes
+50 Mbps connection: ~30-40 minutes
+25 Mbps connection: ~1 hour
+10 Mbps connection: ~2-3 hours
 ```
 
 **Monitor download**:
 ```bash
 # In another terminal window:
-watch -n 10 'ls -lh transactions.csv.gz 2>/dev/null || echo "Not started yet"'
+watch -n 10 'ls *.parquet 2>/dev/null | wc -l'
 
-# This shows file size every 10 seconds
-# Press Ctrl+C to stop watching
+# This shows number of files downloaded
+# Final count will be ~1000 files
 ```
 
 ---
 
-### Step 9.4: Download Other Files (While Waiting)
+### Step 9.4: Verify Downloads Complete
 
-**In a new terminal window** (while transactions downloads):
+**After download finishes**:
 
 ```bash
-cd ~/Documents/Version_Control_For_Databases/data/firebolt-raw
+# Count downloaded files
+ls *.parquet | wc -l
+# Expected: ~1000 files
 
-# Download users (~500 MB, 5-10 minutes)
-aws s3 cp s3://firebolt-publishing-public/samples/e_commerce/users.csv.gz . \
-    --no-sign-request
-
-# Download products (~100 MB, 2-5 minutes)
-aws s3 cp s3://firebolt-publishing-public/samples/e_commerce/products.csv.gz . \
-    --no-sign-request
-
-# Download sessions (~8 GB, 15-30 minutes)
-aws s3 cp s3://firebolt-publishing-public/samples/e_commerce/sessions.csv.gz . \
-    --no-sign-request
+# Check total size
+du -sh .
+# Expected: ~5.0G
 ```
 
-**Progress indicator** (if you want to see progress):
-```bash
-# Use this instead for visible progress:
-aws s3 cp s3://firebolt-publishing-public/samples/e_commerce/users.csv.gz . \
-    --no-sign-request
+**What you'll see**:
+```
+5.0G    .
+```
 
-# You'll see:
-download: s3://firebolt-.../users.csv.gz to ./users.csv.gz
-Completed 127.5 MiB/500.0 MiB (12.5 MiB/s) with 1 file(s) remaining
+**Dataset info**:
+```
+Format: Parquet (compressed)
+Files: ~1000 parquet files
+Total Size: ~5 GB compressed
+Records: ~400 million transactions
+Schema: E-commerce transactions (similar to your existing orders schema)
 ```
 
 ---
 
-### Step 9.5: Verify Downloads Complete
+### Step 9.5: No Decompression Needed!
 
-**After all downloads finish**:
-
-```bash
-# List all downloaded files
-ls -lh
-
-# Expected output:
-# transactions.csv.gz   40G
-# users.csv.gz         500M
-# products.csv.gz      100M
-# sessions.csv.gz       8G
+**Parquet files are already optimized**:
+```
+✓ Columnar format (efficient queries)
+✓ Already compressed (gzip)
+✓ Spark reads directly (no gunzip needed)
+✓ Perfect for lakehouse processing
 ```
 
-**Verify file integrity** (optional but recommended):
-
-```bash
-# Check files aren't truncated
-gunzip -t transactions.csv.gz && echo "✓ transactions OK"
-gunzip -t users.csv.gz && echo "✓ users OK"
-gunzip -t products.csv.gz && echo "✓ products OK"
-gunzip -t sessions.csv.gz && echo "✓ sessions OK"
-```
-
-**What you'll see if all OK**:
-```
-✓ transactions OK
-✓ users OK
-✓ products OK
-✓ sessions OK
-```
-
-**If any errors**:
-```
-gzip: xxx.csv.gz: unexpected end of file
-
-What this means: Download incomplete/corrupted
-Fix: Delete file and re-download:
-  rm xxx.csv.gz
-  aws s3 cp s3://... xxx.csv.gz --no-sign-request
-```
-
----
-
-### Step 9.6: Decompress Files
-
-**⚠️ This will double the disk space needed temporarily**
-
-**Decompress all files**:
-```bash
-# Decompress in background
-echo "Starting decompression..."
-
-gunzip transactions.csv.gz &
-gunzip users.csv.gz &
-gunzip products.csv.gz &
-gunzip sessions.csv.gz &
-
-# Wait for all to complete
-wait
-
-echo "✓ Decompression complete!"
-```
-
-**What happens**:
-```
-1. Creates .csv files
-2. Deletes .csv.gz files automatically
-3. Takes 10-20 minutes total
-```
-
-**Monitor progress**:
-```bash
-# In another terminal:
-watch -n 30 'ls -lh *.csv 2>/dev/null | wc -l'
-
-# Shows number of .csv files created
-# When it shows "4", all done!
-```
-
-**Final verification**:
-```bash
-ls -lh
-
-# Expected:
-# transactions.csv   52G
-# users.csv         1.2G
-# products.csv      200M
-# sessions.csv       15G
-#
-# Total: ~68 GB
-```
+**Your bronze scripts will read these directly!**
 
 ---
 
