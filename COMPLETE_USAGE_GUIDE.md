@@ -357,3 +357,147 @@ docker logs lakehouse-spark 2>&1 | grep token
 | Oracle Object Storage (10GB free) | $0.00 |
 | Supabase (not used - IPv6 issue) | $0.00 |
 | **Total Monthly** | **$0.00** |
+
+---
+
+## Part 8: Upload Data to Oracle Storage
+
+### Step 1: Install rclone (on Mac)
+
+```bash
+brew install rclone
+```
+
+### Step 2: Configure rclone
+
+```bash
+mkdir -p ~/.config/rclone
+
+cat > ~/.config/rclone/rclone.conf << 'EOF'
+[oracle]
+type = s3
+provider = Other
+access_key_id = 962c9f862226831e4edea90cfcfafb8a8dffcd51
+secret_access_key = sd2rGU918DTmn35E4xJ8EV7BX2XUt7DkqC8v6WDNDUw=
+endpoint = https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com
+acl = private
+EOF
+```
+
+### Step 3: Test Connection
+
+```bash
+rclone lsd oracle:lakehouse-prod
+```
+
+### Step 4: Upload Data
+
+```bash
+# Upload with progress
+rclone copy ~/Documents/Version_Control_For_Databases/data/firebolt-raw oracle:lakehouse-prod/bronze/ecommerce/ --progress
+```
+
+### Step 5: Verify Upload
+
+```bash
+rclone size oracle:lakehouse-prod/bronze/ecommerce/
+# Output: Total objects: 1.614k, Total size: 7.567 GiB
+```
+
+---
+
+## Part 9: Process Data from Oracle Storage
+
+### First-Time Setup: Download Required JARs
+
+**Run this once in Jupyter to download AWS/S3 JARs:**
+
+```python
+!wget -q -P /opt/spark/jars/ https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.1/hadoop-aws-3.3.1.jar
+!wget -q -P /opt/spark/jars/ https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.11.901/aws-java-sdk-bundle-1.11.901.jar
+print("JARs downloaded!")
+```
+
+**Then restart kernel (Kernel → Restart).**
+
+### Configure Spark to Read from Oracle Storage
+
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("ProcessEcommerceData") \
+    .config("spark.jars", "/opt/spark/jars/iceberg-spark-runtime-3.3_2.12-1.3.0.jar,/opt/spark/jars/hadoop-aws-3.3.1.jar,/opt/spark/jars/aws-java-sdk-bundle-1.11.901.jar") \
+    .config("spark.hadoop.fs.s3a.endpoint", "https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com") \
+    .config("spark.hadoop.fs.s3a.access.key", "962c9f862226831e4edea90cfcfafb8a8dffcd51") \
+    .config("spark.hadoop.fs.s3a.secret.key", "sd2rGU918DTmn35E4xJ8EV7BX2XUt7DkqC8v6WDNDUw=") \
+    .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+    .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+    .getOrCreate()
+
+print("Spark version:", spark.version)
+```
+
+### Read E-Commerce Data
+
+```python
+# Read all data from Oracle Storage
+df = spark.read.parquet("s3a://lakehouse-prod/bronze/ecommerce/")
+print(f"Total records: {df.count():,}")
+df.printSchema()
+df.show(5)
+```
+
+### Data Schema (411M Records)
+
+```
+root
+ |-- event_time: timestamp
+ |-- event_type: string (view, cart, purchase)
+ |-- product_id: long
+ |-- category_id: long
+ |-- category_code: string
+ |-- brand: string
+ |-- price: double
+ |-- user_id: long
+ |-- user_session: string
+```
+
+### Sample Analytics
+
+```python
+# Event types distribution
+df.groupBy("event_type").count().orderBy("count", ascending=False).show()
+
+# Top 10 brands
+df.groupBy("brand").count().orderBy("count", ascending=False).show(10)
+
+# Price statistics
+df.describe("price").show()
+```
+
+---
+
+## Part 10: Dataset Summary
+
+| Metric | Value |
+|--------|-------|
+| **Total Records** | 411,709,736 |
+| **Total Files** | 1,614 parquet files |
+| **Storage Size** | 7.567 GB |
+| **Source** | Firebolt Sample E-Commerce Data |
+| **Location** | Oracle Object Storage (s3a://lakehouse-prod/bronze/ecommerce/) |
+
+### Data Columns
+
+| Column | Type | Description |
+|--------|------|-------------|
+| event_time | timestamp | When the event occurred |
+| event_type | string | view, cart, or purchase |
+| product_id | long | Product identifier |
+| category_id | long | Category identifier |
+| category_code | string | Category path (e.g., electronics.smartphone) |
+| brand | string | Product brand |
+| price | double | Product price |
+| user_id | long | User identifier |
+| user_session | string | Session UUID |
