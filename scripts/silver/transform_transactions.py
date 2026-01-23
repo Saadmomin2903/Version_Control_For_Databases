@@ -1,6 +1,6 @@
 import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, to_date, min, max, count, row_number
+from pyspark.sql.functions import col, to_date, min, max, count, row_number, desc
 from pyspark.sql.window import Window
 
 def get_spark_session(app_name):
@@ -18,14 +18,19 @@ def get_spark_session(app_name):
         .getOrCreate()
 
 def transform_silver(spark, input_table, output_namespace):
-    print(f"--- 🚀 STARTING SILVER TRANSFORMATION ---")
+    print(f"--- STARTING SILVER TRANSFORMATION (SMART AUDIT) ---")
     
-    # 1. READ BRONZE (From 'main' usually)
-    print("Reading from Bronze...")
-    # We read from main to get the raw data, but we write to dev-silver
+    # 1. READ BRONZE
+    # We read from main branch (Production Bronze)
+    print("Reading from Bronze (main)...")
     bronze_df = spark.sql(f"SELECT * FROM nessie.{input_table}@main")
+    
+    # AUDIT: Initial Count
+    total_rows = bronze_df.count()
+    print(f"Input Row Count: {total_rows}")
 
-    # 2. CLEANING & DEDUPLICATION (The Fact Table Logic)
+    # 2. CLEANING & DEDUPLICATION
+    # Cast types
     clean_df = bronze_df.select(
         col("event_time").cast("timestamp").alias("event_time"),
         col("event_type"),
@@ -44,6 +49,15 @@ def transform_silver(spark, input_table, output_namespace):
     # CRITICAL: Hard Deduplication
     clean_df = clean_df.dropDuplicates(["user_id", "product_id", "event_time", "event_type"])
     
+    # AUDIT: Final Count
+    final_rows = clean_df.count()
+    dropped_rows = total_rows - final_rows
+    print(f"Cleaning Complete.")
+    print(f"QUALITY REPORT:")
+    print(f"   - Input:   {total_rows}")
+    print(f"   - Output:  {final_rows}")
+    print(f"   - Dropped: {dropped_rows} rows (Duplicates/Invalid)")
+
     # 3. WRITE SILVER TRANSACTIONS (Fact Table)
     print("Writing Silver Transactions...")
     silver_transactions = clean_df.select(
@@ -51,7 +65,6 @@ def transform_silver(spark, input_table, output_namespace):
         "product_id", "user_id", "price", "user_session"
     )
     
-    # Write to Nessie table in dev-silver branch
     silver_transactions.writeTo(f"nessie.{output_namespace}.silver_transactions") \
         .using("iceberg") \
         .partitionedBy("event_date") \
@@ -80,7 +93,7 @@ def transform_silver(spark, input_table, output_namespace):
         .using("iceberg") \
         .createOrReplace()
         
-    print(f"✅ SUCCESS: Silver Tables Created in 'dev-silver' branch!")
+    print(f"SUCCESS: All 3 Silver Tables Created in 'dev-silver' branch!")
 
 if __name__ == "__main__":
     spark = get_spark_session("SilverTransform")
