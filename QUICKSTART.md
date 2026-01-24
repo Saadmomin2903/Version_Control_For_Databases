@@ -243,8 +243,8 @@ Expected: `['bronze', 'gold', 'main', 'silver']` (data persisted!)
 ## 🚀 Next Steps
 
 1. **Explore Jupyter**: http://localhost:8888 (interactive queries)
-2. **Read Documentation**: See `SETUP_GUIDE.md` for detailed explanations
-3. **View Journey**: See `plan/complete_journey.md` for full story
+2. **Read Documentation**: See **[SETUP_GUIDE.md](SETUP_GUIDE.md)** for detailed explanations
+3. **View Journey**: See **[plan/complete_journey.md](../../plan/complete_journey.md)** for full story
 4. **Customize**: Modify scripts for your own data
 
 ---
