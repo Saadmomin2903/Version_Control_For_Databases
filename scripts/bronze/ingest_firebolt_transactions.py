@@ -106,7 +106,7 @@ table_name = "nessie.ecommerce.orders_bronze"  # YOUR exact table name
 # Write with partitioning (SCALE ADAPTATION)
 df.writeTo(table_name) \
     .using("iceberg") \
-    .partitionedBy("year_month") \  # NEW - enables efficient 412M record queries
+    .partitionedBy("year_month") \
     .createOrReplace()
 
 print(f"✓ Wrote {record_count:,} records to {table_name}")
