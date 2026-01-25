@@ -44,12 +44,17 @@ def get_spark_session():
             .set('spark.sql.catalog.nessie.warehouse', WAREHOUSE)
             .set('spark.sql.catalog.nessie.io-impl', 'org.apache.iceberg.aws.s3.S3FileIO')
             .set('spark.sql.catalog.nessie.s3.endpoint', AWS_S3_ENDPOINT)
+            # Explicit S3 client region configuration (required for Oracle Object Storage)
+            .set('spark.sql.catalog.nessie.s3.region', AWS_REGION)
+            .set('spark.sql.catalog.nessie.client.region', AWS_REGION)
             .set('spark.hadoop.fs.s3a.access.key', AWS_ACCESS_KEY)
             .set('spark.hadoop.fs.s3a.secret.key', AWS_SECRET_KEY)
             .set('spark.hadoop.fs.s3a.endpoint', AWS_S3_ENDPOINT)
             .set('spark.hadoop.fs.s3a.path.style.access', 'true')
             .set('spark.hadoop.fs.s3a.connection.ssl.enabled', 'false')
             .set('spark.hadoop.fs.s3a.impl', 'org.apache.hadoop.fs.s3a.S3AFileSystem')
+            # AWS SDK region configuration
+            .set('spark.hadoop.fs.s3a.endpoint.region', AWS_REGION)
     )
     return SparkSession.builder.config(conf=conf).getOrCreate()
 
