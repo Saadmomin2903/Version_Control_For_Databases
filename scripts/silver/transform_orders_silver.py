@@ -107,22 +107,23 @@ spark.sql("""
 """)
 print("✓ Table structure created successfully (Fresh).")
 
-# 5. Get Batches (Months)
+# 5. Get Batches (Days - Reduced for VM constraints)
 print("📅 Identifying Batches...")
-months = ['2020-04'] 
-print(f"✓ Using batches: {months}")
+# CRITICAL FIX: 1 month = 66M records = Too big for 32GB disk during shuffle
+# Process 1 day at a time (~2M records) to stay within disk limits
+days = ['2020-04-01', '2020-04-02']  # Sample 2 days for demo
+print(f"✓ Using batches: {days}")
 
 # 6. Process & Append Batches
 total_written = 0
-for month in months:
-    print(f"\n🔄 Processing Batch: {month}")
+for day in days:
+    print(f"\n🔄 Processing Batch: {day}")
     try:
-        # 1. READ FILTERED (Partition Pruning)
-        # Critical optimization: Filter BEFORE loading to avoid full table scan/shuffle
-        print(f"   Reading Bronze data for {month}...")
+        # 1. READ FILTERED (Partition Pruning - Now by DAY)
+        print(f"   Reading Bronze data for {day}...")
         batch_bronze = spark.sql(f"""
             SELECT * FROM nessie.ecommerce.`orders_bronze@bronze` 
-            WHERE date_format(event_time, 'yyyy-MM') = '{month}'
+            WHERE date(event_time) = '{day}'
         """)
         
         # 2. TRANSFORM & DEDUP (Small Shuffle)
@@ -137,17 +138,17 @@ for month in months:
 
         batch_count = silver_batch.count()
         if batch_count == 0:
-            print(f"   ⚠️ Skipping empty batch: {month}")
+            print(f"   ⚠️ Skipping empty batch: {day}")
             continue
             
         print(f"   Writing {batch_count:,} records...")
         silver_batch.writeTo("nessie.ecommerce.`orders_silver@silver`").append()
         
         total_written += batch_count
-        print(f"   ✅ Batch {month} Done.")
+        print(f"   ✅ Batch {day} Done.")
         
     except Exception as e:
-        print(f"   ❌ Batch {month} Failed: {e}")
+        print(f"   ❌ Batch {day} Failed: {e}")
         # Stop on error to prefer stability
         raise e
 
