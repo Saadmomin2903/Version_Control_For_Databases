@@ -44,7 +44,8 @@ def ingest_orders(spark):
     print("🚀 Starting Bronze Ingestion...")
     
     # 2. Read Raw Data (Allow Schema Inference to handle Binary/String mismatches)
-    input_path = "s3a://lakehouse-prod/bronze/ecommerce/" 
+    # FIX: Use glob pattern to ignore nested 'orders_bronze' directory if it exists
+    input_path = "s3a://lakehouse-prod/bronze/ecommerce/*.parquet" 
     print(f"Reading from: {input_path}")
     print("This may take a few minutes...")
     
