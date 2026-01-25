@@ -19,7 +19,9 @@ WAREHOUSE = os.getenv("WAREHOUSE", "s3a://lakehouse/warehouse")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "admin")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "password123")
 AWS_S3_ENDPOINT = os.getenv("AWS_S3_ENDPOINT", "http://minio:9000")
-AWS_REGION = os.getenv("AWS_REGION", "ap-mumbai-1")
+# Hardcode region - env var might be empty from docker-compose
+_env_region = os.getenv("AWS_REGION", "")
+AWS_REGION = _env_region if _env_region else "us-ashburn-1"  # Oracle Cloud region
 
 def get_spark_session():
     conf = (
