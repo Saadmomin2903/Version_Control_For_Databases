@@ -29,6 +29,9 @@ def get_spark_session():
             .setAppName('gold_layer_builder')
             # Use localhost - script runs inside same container as Spark Master
             .set("spark.master", "spark://localhost:7077")
+            # CRITICAL: Driver host must be reachable from VM2 workers
+            .set("spark.driver.host", "10.0.0.148")  # VM1 private IP
+            .set("spark.driver.bindAddress", "0.0.0.0")
             # Resource configuration to fit VM2 worker (4G worker, 2G executor)
             .set('spark.executor.memory', '2g')
             .set('spark.executor.cores', '1')
