@@ -2,20 +2,20 @@ version: '3.8'
 
 services:
   spark-worker:
-    image: alexmerced/spark33-notebook # Same image as master for compatibility
+    image: alexmerced/spark33-notebook
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
       - SPARK_WORKER_CORES=2
       - SPARK_WORKER_MEMORY=4G
       - SPARK_DRIVER_MEMORY=4g
       - SPARK_EXECUTOR_MEMORY=4g
-      # Connectivity
-      - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password123
-      - AWS_S3_ENDPOINT=http://minio:9000
-      - NESSIE_URI=http://nessie:19120/api/v1
-      - WAREHOUSE=s3a://lakehouse/warehouse
+      # Oracle Object Storage credentials (same as master)
+      - AWS_REGION=${ORACLE_REGION}
+      - AWS_ACCESS_KEY_ID=${ORACLE_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${ORACLE_SECRET_KEY}
+      - AWS_S3_ENDPOINT=${ORACLE_ENDPOINT}
+      - NESSIE_URI=${NESSIE_URI}
+      - WAREHOUSE=${WAREHOUSE}
     volumes:
       - ./data:/home/jovyan/data
       - ./scripts:/home/jovyan/scripts
@@ -29,5 +29,4 @@ services:
 
 networks:
   lakehouse-network:
-    external: true
-    name: lakehouse-network # Explicitly join the existing network
+    driver: bridge

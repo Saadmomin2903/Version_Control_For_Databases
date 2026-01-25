@@ -7,9 +7,13 @@ services:
     hostname: spark-master
     ports:
       - "8888:8888" # Jupyter
-      - "4040:4040" # Spark UI
+      - "7077:7077" # Spark Master (for worker connectivity)
+      - "8081:8080" # Spark Master UI
+      - "4040:4040" # Spark Driver UI
     environment:
-      # No SPARK_MODE - let it default to Jupyter/SingleNode
+      # Enable Spark Master mode for cluster operation
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=0.0.0.0
       - SPARK_DRIVER_MEMORY=4g
       - AWS_ACCESS_KEY_ID=${ORACLE_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${ORACLE_SECRET_KEY}
@@ -21,15 +25,14 @@ services:
       - ./scripts:/home/jovyan/scripts
       - ./data:/home/jovyan/data
     restart: always
-    # Healthcheck on Jupyter port (8888) which we know works
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8888" ]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
-      - spark-network
+      - lakehouse-network
 
 networks:
-  spark-network:
+  lakehouse-network:
     driver: bridge
