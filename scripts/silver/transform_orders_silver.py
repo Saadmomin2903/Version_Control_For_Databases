@@ -81,9 +81,20 @@ spark.sql("DROP TABLE IF EXISTS nessie.ecommerce.`orders_silver@silver`")
 
 print("💾 Initializing Empty Table: nessie.ecommerce.`orders_silver@silver`")
 try:
-    spark.sql("CREATE NAMESPACE IF NOT EXISTS nessie.ecommerce")
-except:
     pass
+
+# 3.5 Schema Inference (Required for Table Creation)
+# We need to define 'silver_final' structure here so we can create the empty table.
+# We read 0 records just to get the columns.
+print("   Inferring Schema...")
+_schema_df = spark.sql("SELECT * FROM nessie.ecommerce.`orders_bronze@bronze` LIMIT 1")
+silver_final = _schema_df \
+    .withColumnRenamed("user_id", "customer_id") \
+    .withColumn("order_date", F.to_date(F.col("event_time"))) \
+    .withColumn("data_quality_score", F.lit(100)) \
+    .withColumn("processed_at", F.current_timestamp()) \
+    .withColumn("source_branch", F.lit("bronze")) \
+    .dropDuplicates(["event_time", "customer_id", "product_id", "event_type"])
 
 # Create table structure
 silver_final.limit(0).createOrReplaceTempView("silver_structure")
