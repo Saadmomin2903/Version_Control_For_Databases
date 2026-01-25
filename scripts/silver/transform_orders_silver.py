@@ -17,15 +17,13 @@ from pyspark.sql import functions as F
 # Add utils to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-# Configuration
+# Configuration - MUST MATCH Bronze ingestion (Oracle Object Storage)
 NESSIE_URI = os.getenv("NESSIE_URI", "http://nessie:19120/api/v1")
-WAREHOUSE = os.getenv("WAREHOUSE", "s3a://lakehouse/warehouse")
-AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "admin")
-AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "password123")
-AWS_S3_ENDPOINT = os.getenv("AWS_S3_ENDPOINT", "http://minio:9000")
-# Hardcode region fallback - env var might be empty from docker-compose
-_env_region = os.getenv("AWS_REGION", "")
-AWS_REGION = _env_region if _env_region else "ap-mumbai-1"
+WAREHOUSE = "s3a://lakehouse-prod/warehouse"  # Oracle Object Storage
+AWS_ACCESS_KEY = "962c9f862226831e4edea90cfcfafb8a8dffcd51"  # Oracle OCI Key
+AWS_SECRET_KEY = "sd2rGU918DTmn35E4xJ8EV7BX2XUt7DkqC8v6WDNDUw="  # Oracle OCI Secret
+AWS_S3_ENDPOINT = "https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com"
+AWS_REGION = "ap-mumbai-1"
 
 print("=" * 70)
 print("SILVER EVENTS - BATCHED OPTIMIZATION (WITH DROP)")
@@ -56,7 +54,7 @@ conf = (
         .set('spark.hadoop.fs.s3a.secret.key', AWS_SECRET_KEY)
         .set('spark.hadoop.fs.s3a.endpoint', AWS_S3_ENDPOINT)
         .set('spark.hadoop.fs.s3a.path.style.access', 'true')
-        .set('spark.hadoop.fs.s3a.connection.ssl.enabled', 'false')
+        .set('spark.hadoop.fs.s3a.connection.ssl.enabled', 'true')
         .set('spark.hadoop.fs.s3a.impl', 'org.apache.hadoop.fs.s3a.S3AFileSystem')
         .set('spark.sql.catalog.nessie.s3.region', AWS_REGION)
         .set('spark.sql.catalog.nessie.client.region', AWS_REGION)
