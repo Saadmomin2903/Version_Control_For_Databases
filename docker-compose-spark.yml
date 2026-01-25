@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  spark-master:
+    image: alexmerced/spark33-notebook
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "8888:8888" # Jupyter
+      - "4040:4040" # Spark UI
+    environment:
+      # No SPARK_MODE - let it default to Jupyter/SingleNode
+      - SPARK_DRIVER_MEMORY=4g
+      - AWS_ACCESS_KEY_ID=${ORACLE_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${ORACLE_SECRET_KEY}
+      - AWS_S3_ENDPOINT=${ORACLE_ENDPOINT}
+      - AWS_REGION=${ORACLE_REGION}
+      - NESSIE_URI=${NESSIE_URI}
+      - WAREHOUSE=${WAREHOUSE}
+    volumes:
+      - ./scripts:/home/jovyan/scripts
+      - ./data:/home/jovyan/data
+    restart: always
+    # Healthcheck on Jupyter port (8888) which we know works
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8888" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - spark-network
+
+networks:
+  spark-network:
+    driver: bridge

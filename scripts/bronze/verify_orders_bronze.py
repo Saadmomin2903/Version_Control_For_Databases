@@ -1,15 +1,7 @@
-"""
-Bronze Orders Ingestion using PySpark with Nessie Catalog
-
-This script is designed to run inside the Spark notebook container.
-It reads CSV data and writes to Iceberg tables managed by Nessie.
-"""
 
 import os
 import pyspark
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, LongType, TimestampType
-from pyspark.sql.functions import col
 
 def create_spark_session():
     # Set AWS Region globally via Env Vars (Required for AWS SDK v2)
@@ -18,7 +10,7 @@ def create_spark_session():
     
     # Production S3/Iceberg/Nessie config for Oracle Object Storage
     return SparkSession.builder \
-        .appName("Bronze_Ingestion_Orders") \
+        .appName("Verify_Bronze_Orders") \
         .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.3_2.12:0.67.0,software.amazon.awssdk:bundle:2.17.178,org.apache.hadoop:hadoop-aws:3.3.1") \
         .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions") \
         .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog") \
@@ -40,57 +32,38 @@ def create_spark_session():
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .getOrCreate()
 
-def ingest_orders(spark):
-    print("🚀 Starting Bronze Ingestion...")
-    
-    # 2. Read Raw Data (Allow Schema Inference to handle Binary/String mismatches)
-    input_path = "s3a://lakehouse-prod/bronze/ecommerce/" 
-    print(f"Reading from: {input_path}")
-    print("This may take a few minutes...")
-    
-    df = spark.read.parquet(input_path)
-    
-    # Cache to avoid re-reading for count and write
-    # df.cache() 
-    
-    record_count = df.count()
-    print(f"✅ Loaded {record_count:,} records")
-
-    # Show schema
-    print("\n📋 Schema:")
-    df.printSchema()
-    
-    # 3. Create Namespace
-    spark.sql("CREATE NAMESPACE IF NOT EXISTS nessie.ecommerce")
-    
-    # 4. Create Table and Write (using SQL to enforce Partitioning as per Vision)
+def verify_table(spark):
     table_name = "nessie.ecommerce.orders_bronze"
-    print(f"💾 Creating/Replacing table {table_name} with Partitioning (Vision Aligned)...")
+    print(f"🔍 Verifying table: {table_name}")
     
-    # We use SQL DDL because it supports Iceberg transforms (days, bucket) natively
-    spark.sql(f"""
-        CREATE OR REPLACE TABLE {table_name} (
-            event_time TIMESTAMP,
-            event_type STRING,
-            product_id LONG,
-            category_id STRING,
-            category_code STRING,
-            brand STRING,
-            price DOUBLE,
-            user_id STRING,
-            user_session STRING
-        )
-        USING iceberg
-        PARTITIONED BY (days(event_time), bucket(16, user_id))
-    """)
-    
-    print(f"💾 Appending data to {table_name}...")
-    df.writeTo(table_name).append()
-    
-    print("✅ Ingestion Complete!")
+    # Check if table exists
+    try:
+        tables = spark.sql("SHOW TABLES IN nessie.ecommerce").collect()
+        exists = any(row.tableName == 'orders_bronze' for row in tables)
+        if not exists:
+            print(f"❌ Table {table_name} NOT found in catalog!")
+            return
+        print(f"✅ Table {table_name} found in catalog.")
+    except Exception as e:
+        print(f"❌ Error listing tables: {e}")
+        return
 
-# Call the ingestion function
+    # Count rows
+    print("⏳ Counting rows (this might take a moment)...")
+    try:
+        count = spark.sql(f"SELECT COUNT(*) as cnt FROM {table_name}").collect()[0]['cnt']
+        print(f"✅ Total Row Count: {count:,}")
+    except Exception as e:
+        print(f"❌ Error counting rows: {e}")
+
+    # Show sample
+    print("👀 Sample Data (Top 5):")
+    try:
+        spark.sql(f"SELECT * FROM {table_name} LIMIT 5").show(truncate=False)
+    except Exception as e:
+        print(f"❌ Error fetching sample: {e}")
+
 if __name__ == "__main__":
     spark = create_spark_session()
-    ingest_orders(spark)
+    verify_table(spark)
     spark.stop()
