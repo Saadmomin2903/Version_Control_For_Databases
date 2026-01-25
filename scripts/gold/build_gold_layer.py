@@ -25,6 +25,8 @@ def get_spark_session():
     conf = (
         pyspark.SparkConf()
             .setAppName('gold_layer_builder')
+            # Reverting Cluster Mode due to connection issues.
+            # Fanout Writer below will solve the performance/crashing issue.
             .set('spark.sql.shuffle.partitions', '200')  # Lower shuffle for aggregations
             .set('spark.jars.packages', 
                  'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,'
@@ -118,14 +120,28 @@ def build_gold_layer():
     )
 
     print("   -> Writing to Iceberg (Bucketed by User)...")
-    # FIX 2: Explicit ORDER BY in the SQL to force clustering during CTAS
-    customer_stats.createOrReplaceTempView("temp_customer_stats")
-    spark.sql("""
-        CREATE OR REPLACE TABLE nessie.ecommerce.customer_stats_gold
+    print("   -> Writing to Iceberg (Bucketed by User) - Using FANOUT Writer...")
+    # FIX 3: THE NUCLEAR OPTION - Fanout Writer
+    # The error happens because sorting isn't perfect across tasks. 
+    # Fanout keeps files open (safe here because only 16 buckets).
+    
+    # 1. Create table with Fanout enabled
+    spark.sql(f"""
+        CREATE OR REPLACE TABLE nessie.ecommerce.customer_stats_gold (
+            customer_id LONG,
+            total_spend DOUBLE,
+            total_orders LONG,
+            first_order_date DATE,
+            last_order_date DATE,
+            customer_segment STRING
+        )
         USING iceberg
         PARTITIONED BY (bucket(16, customer_id))
-        AS SELECT * FROM temp_customer_stats ORDER BY customer_id
+        TBLPROPERTIES ('write.spark.fanout.enabled'='true')
     """)
+    
+    # 2. Write data (Sorting is no longer required, but good practice)
+    customer_stats.writeTo("nessie.ecommerce.customer_stats_gold").append()
     print("   ✅ Done.")
 
     # ---------------------------------------------------------
