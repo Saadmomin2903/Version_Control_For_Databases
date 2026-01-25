@@ -41,18 +41,15 @@ services:
     image: alexmerced/spark33-notebook
     container_name: lakehouse-spark
     hostname: spark-master
-    ports:
-      - "8888:8888"
-      - "7077:7077" # Spark master port
-      - "8081:8080" # Spark UI
-      - "4040:4040" # Spark Driver UI
+    # Use host network so driver port is directly accessible by VM2 executors
+    network_mode: host
     environment:
       # CHANGED: Now points to Oracle Object Storage (not MinIO)
       - AWS_REGION=${ORACLE_REGION}
       - AWS_ACCESS_KEY_ID=${ORACLE_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${ORACLE_SECRET_KEY}
       - AWS_S3_ENDPOINT=${ORACLE_ENDPOINT}
-      - NESSIE_URI=http://nessie:19120/api/v1
+      - NESSIE_URI=http://localhost:19120/api/v1
       - WAREHOUSE=${WAREHOUSE}
       # Spark Master configuration
       - SPARK_MODE=master
@@ -64,8 +61,6 @@ services:
       # YOUR exact volume mounts
       - ./data:/home/jovyan/data
       - ./scripts:/home/jovyan/scripts
-    networks:
-      - lakehouse-network
     depends_on:
       - nessie
     restart: unless-stopped
