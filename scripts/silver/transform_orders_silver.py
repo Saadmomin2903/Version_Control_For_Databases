@@ -80,8 +80,8 @@ print("💥 HARD RESET: Dropping orders_silver table...")
 spark.sql("DROP TABLE IF EXISTS nessie.ecommerce.`orders_silver@silver`")
 
 print("💾 Initializing Empty Table: nessie.ecommerce.`orders_silver@silver`")
-try:
-    pass
+# Create namespace
+spark.sql("CREATE NAMESPACE IF NOT EXISTS nessie.ecommerce")
 
 # 3.5 Schema Inference (Required for Table Creation)
 # We need to define 'silver_final' structure here so we can create the empty table.
