@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  trino:
+    image: trinodb/trino:406
+    container_name: lakehouse-trino
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./trino/etc:/etc/trino
+    networks:
+      - lakehouse-network
+    environment:
+      - ORACLE_ENDPOINT=${ORACLE_ENDPOINT}
+      - ORACLE_REGION=${ORACLE_REGION}
+      - ORACLE_ACCESS_KEY=${ORACLE_ACCESS_KEY}
+      - ORACLE_SECRET_KEY=${ORACLE_SECRET_KEY}
+    # Startup script to substitute env vars in catalog config
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        echo "🔧 Configuring (injecting credentials)..."
+        # We use sed to replace placeholders in the mounted file (modifies host file, but ensures config exists)
+        sed -e "s|\${ORACLE_ENDPOINT}|$ORACLE_ENDPOINT|g" \
+            -e "s|\${ORACLE_REGION}|$ORACLE_REGION|g" \
+            -e "s|\${ORACLE_ACCESS_KEY}|$ORACLE_ACCESS_KEY|g" \
+            -e "s|\${ORACLE_SECRET_KEY}|$ORACLE_SECRET_KEY|g" \
+            /etc/trino/catalog/iceberg.properties.template > /etc/trino/catalog/iceberg.properties
+            
+        echo "✅ Configuration complete. Starting Trino..."
+        /usr/lib/trino/bin/run-trino
+
+networks:
+  lakehouse-network:
+    external: true

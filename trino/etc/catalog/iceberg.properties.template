@@ -1,0 +1,15 @@
+connector.name=iceberg
+iceberg.catalog.type=nessie
+iceberg.nessie-catalog.uri=http://lakehouse-nessie:19120/api/v1
+iceberg.nessie-catalog.ref=main
+iceberg.nessie-catalog.authentication.type=NONE
+iceberg.file-format=PARQUET
+
+# S3 / Oracle Object Storage Configuration
+fs.native-s3.enabled=true
+s3.endpoint=${ORACLE_ENDPOINT}
+s3.region=${ORACLE_REGION}
+s3.aws-access-key=${ORACLE_ACCESS_KEY}
+s3.aws-secret-key=${ORACLE_SECRET_KEY}
+s3.path-style-access=true
+s3.ssl.enabled=true
