@@ -40,9 +40,10 @@ services:
     # YOUR exact Spark image
     image: alexmerced/spark33-notebook
     container_name: lakehouse-spark
-    hostname: spark-master
     # Use host network so driver port is directly accessible by VM2 executors
     network_mode: host
+    extra_hosts:
+      - "spark-master:10.0.0.148" # Self-reference for hostname resolution
     environment:
       # CHANGED: Now points to Oracle Object Storage (not MinIO)
       - AWS_REGION=${ORACLE_REGION}
