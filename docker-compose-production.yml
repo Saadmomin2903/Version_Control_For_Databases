@@ -74,9 +74,10 @@ services:
     command:
       - -c
       - |
-        /opt/spark/sbin/start-master.sh -h 0.0.0.0 -p 7077 &
-        sleep 5
-        exec start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
+        /opt/spark/sbin/start-master.sh -h 0.0.0.0 -p 7077
+        sleep 3
+        jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --NotebookApp.token='' --NotebookApp.password='' --allow-root &
+        tail -f /opt/spark/logs/*.out
     deploy:
       resources:
         limits:
