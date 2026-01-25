@@ -30,11 +30,42 @@ services:
       retries: 5
       start_period: 45s
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+
+  # Airflow Webserver
+  airflow-webserver:
+    image: apache/airflow:2.8.0
+    container_name: lakehouse-airflow
+    network_mode: host
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${SUPABASE_JDBC_URL}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=production_secret_key_change_me
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/scripts
+      - /var/run/docker.sock:/var/run/docker.sock # Allow triggering Docker commands
+    ports:
+      - "8089:8080" # Airflow UI
+    command: >
+      bash -c "airflow db init &&
+               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
+               airflow webserver"
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: apache/airflow:2.8.0
+    container_name: lakehouse-airflow-scheduler
+    network_mode: host
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${SUPABASE_JDBC_URL}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/scripts
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: airflow scheduler
+    restart: unless-stopped
 
   spark-notebook:
     # YOUR exact Spark image
