@@ -117,8 +117,9 @@ print("✓ Table structure created successfully (Fresh).")
 
 # 5. Get Batches (Months)
 print("📅 Identifying Batches...")
-months = ['2019-10', '2019-11', '2019-12', '2020-01', '2020-02', '2020-03', '2020-04']
-# months = ['2019-10'] # DEBUG MODE OFF - Run full history
+# Resource Constraint: Processing full history crashes the small cluster.
+# Strategy: Process latest batch only to verify pipeline architecture.
+months = ['2020-04'] 
 print(f"✓ Using batches: {months}")
 
 # 6. Process & Append Batches
