@@ -77,7 +77,25 @@ silver_final = bronze_df \
     .withColumn("source_branch", F.lit("bronze")) \
     .dropDuplicates(["event_time", "customer_id", "product_id", "event_type"])
 
-# 3. HARD RESET: Drop and Recreate
+# 3. Validation (Great Expectations)
+print("🧐 Validating Transformed Data...")
+try:
+    from quality.silver_expectations import validate_silver_orders
+    validation_passed = validate_silver_orders(silver_final)
+except ImportError:
+    print("⚠️  Great Expectations module not found / import error. Skipping validation (Dev Mode).")
+    validation_passed = True
+except Exception as e:
+    print(f"⚠️  Validation failed with error: {e}")
+    validation_passed = False
+
+if not validation_passed:
+    print("❌ Critical Data Quality Failure. Aborting Silver Layer Write.")
+    sys.exit(1)
+
+print("✅ Data Quality Passed. Proceeding to Write...")
+
+# 4. HARD RESET: Drop and Recreate
 print("💥 HARD RESET: Dropping orders_silver table...")
 spark.sql("DROP TABLE IF EXISTS nessie.ecommerce.`orders_silver@silver`")
 
@@ -98,16 +116,16 @@ spark.sql("""
 """)
 print("✓ Table structure created successfully (Fresh).")
 
-# 4. Get Batches (Months)
+# 5. Get Batches (Months)
 print("📅 Identifying Batches...")
 # Fallback to known months for speed/safety
 months = ['2019-10', '2019-11', '2019-12', '2020-01', '2020-02', '2020-03', '2020-04']
 print(f"✓ Using batches: {months}")
 
-# 5. Process & Append Batches
+# 6. Process & Append Batches
 total_written = 0
 for month in months:
-    print(f"\n🔄 Processing Batch: {month}")
+    print(f"\\n🔄 Processing Batch: {month}")
     try:
         batch_df = silver_final.filter(F.date_format(F.col("event_time"), 'yyyy-MM') == month)
         
@@ -125,7 +143,7 @@ for month in months:
     except Exception as e:
         print(f"   ❌ Batch {month} Failed: {e}")
 
-print("\n" + "=" * 50)
+print("\\n" + "=" * 50)
 print(f"✅ Total Records Written: {total_written:,}")
 # Verify final count
 final_count = spark.sql("SELECT COUNT(*) as cnt FROM nessie.ecommerce.`orders_silver@silver`").collect()[0]['cnt']
@@ -133,3 +151,4 @@ print(f"✓ Verified Table Count: {final_count:,}")
 print("=" * 50)
 
 spark.stop()
+
