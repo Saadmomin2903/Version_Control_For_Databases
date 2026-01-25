@@ -21,7 +21,7 @@ AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "password123")
 AWS_S3_ENDPOINT = os.getenv("AWS_S3_ENDPOINT", "http://minio:9000")
 # Hardcode region - env var might be empty from docker-compose
 _env_region = os.getenv("AWS_REGION", "")
-AWS_REGION = _env_region if _env_region else "us-ashburn-1"  # Oracle Cloud region
+AWS_REGION = _env_region if _env_region else "ap-mumbai-1"  # Oracle Cloud Mumbai region
 
 def get_spark_session():
     conf = (
