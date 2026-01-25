@@ -69,12 +69,14 @@ services:
     depends_on:
       - nessie
     restart: unless-stopped
-    # Start Spark Master alongside Jupyter
-    command: >
-      bash -c "
-        /opt/spark/sbin/start-master.sh --host 0.0.0.0 --port 7077 &&
-        start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
-      "
+    # Start Spark Master in background, then run Jupyter (this keeps container alive)
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        /opt/spark/sbin/start-master.sh -h 0.0.0.0 -p 7077 &
+        sleep 5
+        exec start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
     deploy:
       resources:
         limits:
