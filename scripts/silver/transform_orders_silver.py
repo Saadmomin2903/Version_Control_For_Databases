@@ -79,11 +79,34 @@ silver_final = bronze_df \
     .withColumn("source_branch", F.lit("bronze")) \
     .dropDuplicates(["event_time", "customer_id", "product_id", "event_type"])
 
-# 3. Validation (Great Expectations)
-print("🧐 Validating Transformed Data...")
+# 2.1 Quarantine Logic (Handle Known Data Quality Issues)
+print("🧹 Applying Data Quality Filters (Quarantine logic)...")
+
+# Clean Data: Positive Price AND valid IDs
+clean_df = silver_final.filter(
+    (F.col("price") > 0.01) & 
+    (F.col("order_id").isNotNull()) & 
+    (F.col("customer_id").isNotNull())
+)
+
+# Quarantine Data: Negative Price OR Null IDs
+quarantine_df = silver_final.filter(
+    (F.col("price") <= 0.01) | 
+    (F.col("order_id").isNull()) | 
+    (F.col("customer_id").isNull())
+)
+
+clean_count = clean_df.count()
+quarantine_count = quarantine_df.count()
+
+print(f"📊 Quality Split: {clean_count:,} Clean Records | {quarantine_count:,} Quarantined Records")
+
+# 3. Validation (Great Expectations) on CLEAN DATA ONLY
+print("🧐 Validating Clean Data...")
 try:
     from quality.silver_expectations import validate_silver_orders
-    validation_passed = validate_silver_orders(silver_final)
+    # Validate the CLEAN dataframe, not the raw one
+    validation_passed = validate_silver_orders(clean_df)
 except ImportError:
     print("⚠️  Great Expectations module not found / import error. Skipping validation (Dev Mode).")
     validation_passed = True
@@ -92,7 +115,7 @@ except Exception as e:
     validation_passed = False
 
 if not validation_passed:
-    print("❌ Critical Data Quality Failure. Aborting Silver Layer Write.")
+    print("❌ Critical Data Quality Failure in CLEAN dataset. Aborting.")
     sys.exit(1)
 
 print("✅ Data Quality Passed. Proceeding to Write...")
@@ -107,8 +130,8 @@ try:
 except:
     pass
 
-# Create table structure
-silver_final.limit(0).createOrReplaceTempView("silver_structure")
+# Create table structure using CLEAN dataframe
+clean_df.limit(0).createOrReplaceTempView("silver_structure")
 
 spark.sql("""
     CREATE TABLE nessie.ecommerce.`orders_silver@silver`
@@ -124,12 +147,13 @@ print("📅 Identifying Batches...")
 months = ['2019-10', '2019-11', '2019-12', '2020-01', '2020-02', '2020-03', '2020-04']
 print(f"✓ Using batches: {months}")
 
-# 6. Process & Append Batches
+# 6. Process & Append Batches (CLEAN DATA ONLY)
 total_written = 0
 for month in months:
-    print(f"\\n🔄 Processing Batch: {month}")
+    print(f"\n🔄 Processing Batch: {month}")
     try:
-        batch_df = silver_final.filter(F.date_format(F.col("event_time"), 'yyyy-MM') == month)
+        # Filter CLEAN data for this batch
+        batch_df = clean_df.filter(F.date_format(F.col("event_time"), 'yyyy-MM') == month)
         
         batch_count = batch_df.count()
         if batch_count == 0:
@@ -144,6 +168,26 @@ for month in months:
         
     except Exception as e:
         print(f"   ❌ Batch {month} Failed: {e}")
+
+# 7. Write Quarantine Data (Audit)
+if quarantine_count > 0:
+    print("\n⚠️  Writing Quarantined Records to Audit Table...")
+    try:
+        # Create Quarantine Table if not exists
+        quarantine_df.limit(0).createOrReplaceTempView("quarantine_structure")
+        spark.sql("""
+            CREATE TABLE IF NOT EXISTS nessie.ecommerce.`orders_quarantine@silver`
+            USING iceberg
+            AS SELECT * FROM quarantine_structure
+        """)
+        
+        # Append bad data
+        quarantine_df.writeTo("nessie.ecommerce.`orders_quarantine@silver`").append()
+        print(f"✅ Quarantined {quarantine_count:,} records to 'nessie.ecommerce.orders_quarantine'.")
+    except Exception as e:
+        print(f"❌ Failed to write quarantine data: {e}")
+else:
+    print("\n✨ No records quarantined! Perfect data quality.")
 
 print("\\n" + "=" * 50)
 print(f"✅ Total Records Written: {total_written:,}")
