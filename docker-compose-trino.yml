@@ -34,3 +34,4 @@ services:
 networks:
   lakehouse-network:
     external: true
+    name: version_control_for_databases_lakehouse-network
