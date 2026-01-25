@@ -48,7 +48,8 @@ services:
     ports:
       - "8089:8080" # Airflow UI
     command: >
-      bash -c "airflow db init &&
+      bash -c "export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$(echo $SUPABASE_JDBC_URL | sed 's/jdbc://' | sed "s|://|://postgres:$SUPABASE_PASSWORD@|") &&
+               airflow db init &&
                airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
                airflow webserver"
     restart: unless-stopped
@@ -59,12 +60,14 @@ services:
     network_mode: host
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${SUPABASE_JDBC_URL}
+      # - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${SUPABASE_JDBC_URL} # Calculated at runtime
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./scripts:/opt/airflow/scripts
       - /var/run/docker.sock:/var/run/docker.sock
-    command: airflow scheduler
+    command: >
+      bash -c "export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$(echo $SUPABASE_JDBC_URL | sed 's/jdbc://' | sed "s|://|://postgres:$SUPABASE_PASSWORD@|") &&
+               airflow scheduler"
     restart: unless-stopped
 
   spark-notebook:
