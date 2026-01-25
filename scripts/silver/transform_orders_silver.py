@@ -144,7 +144,8 @@ print("✓ Table structure created successfully (Fresh).")
 # 5. Get Batches (Months)
 print("📅 Identifying Batches...")
 # Fallback to known months for speed/safety
-months = ['2019-10', '2019-11', '2019-12', '2020-01', '2020-02', '2020-03', '2020-04']
+# months = ['2019-10', '2019-11', '2019-12', '2020-01', '2020-02', '2020-03', '2020-04']
+months = ['2019-10'] # DEBUG MODE: Process only 1st batch
 print(f"✓ Using batches: {months}")
 
 # 6. Process & Append Batches (CLEAN DATA ONLY)
