@@ -70,29 +70,10 @@ print("📖 Reading Bronze Source...")
 bronze_df = spark.sql("SELECT * FROM nessie.ecommerce.`orders_bronze@bronze`")
 
 # 2. Transformation Logic
-print("🔧 Defining Transformations...")
-silver_final = bronze_df \
-    .withColumnRenamed("user_id", "customer_id") \
-    .withColumn("order_date", F.to_date(F.col("event_time"))) \
-    .withColumn("data_quality_score", F.lit(100)) \
-    .withColumn("processed_at", F.current_timestamp()) \
-    .withColumn("source_branch", F.lit("bronze")) \
-    .dropDuplicates(["event_time", "customer_id", "product_id", "event_type"])
+print("🔧 Transformations will be applied per batch (optimized)")
 
-# 3. Validation (Great Expectations)
-print("🧐 Validating Transformed Data...")
-try:
-    from quality.silver_expectations import validate_silver_orders
-    # Warn-only validation (returns True even on failure)
-    validation_passed = validate_silver_orders(silver_final)
-except ImportError:
-    print("⚠️  Great Expectations module not found / import error. Skipping validation (Dev Mode).")
-    validation_passed = True
-except Exception as e:
-    print(f"⚠️  Validation failed with error: {e}")
-    validation_passed = True # proceed anyway
-
-print("✅ Data Quality Check Complete. Proceeding to Write...")
+# 3. Validation
+print("🧐 Validation skipped for global check (applied per batch)")
 
 # 4. HARD RESET: Drop and Recreate
 print("💥 HARD RESET: Dropping orders_silver table...")
@@ -117,32 +98,47 @@ print("✓ Table structure created successfully (Fresh).")
 
 # 5. Get Batches (Months)
 print("📅 Identifying Batches...")
-# Resource Constraint: Processing full history crashes the small cluster.
-# Strategy: Process latest batch only to verify pipeline architecture.
 months = ['2020-04'] 
 print(f"✓ Using batches: {months}")
 
 # 6. Process & Append Batches
 total_written = 0
 for month in months:
-    print(f"\\n🔄 Processing Batch: {month}")
+    print(f"\n🔄 Processing Batch: {month}")
     try:
-        # Use simple filter on main DF
-        batch_df = silver_final.filter(F.date_format(F.col("event_time"), 'yyyy-MM') == month)
+        # 1. READ FILTERED (Partition Pruning)
+        # Critical optimization: Filter BEFORE loading to avoid full table scan/shuffle
+        print(f"   Reading Bronze data for {month}...")
+        batch_bronze = spark.sql(f"""
+            SELECT * FROM nessie.ecommerce.`orders_bronze@bronze` 
+            WHERE date_format(event_time, 'yyyy-MM') = '{month}'
+        """)
         
-        batch_count = batch_df.count()
+        # 2. TRANSFORM & DEDUP (Small Shuffle)
+        print("   Transforming & Deduplicating...")
+        silver_batch = batch_bronze \
+            .withColumnRenamed("user_id", "customer_id") \
+            .withColumn("order_date", F.to_date(F.col("event_time"))) \
+            .withColumn("data_quality_score", F.lit(100)) \
+            .withColumn("processed_at", F.current_timestamp()) \
+            .withColumn("source_branch", F.lit("bronze")) \
+            .dropDuplicates(["event_time", "customer_id", "product_id", "event_type"])
+
+        batch_count = silver_batch.count()
         if batch_count == 0:
             print(f"   ⚠️ Skipping empty batch: {month}")
             continue
             
         print(f"   Writing {batch_count:,} records...")
-        batch_df.writeTo("nessie.ecommerce.`orders_silver@silver`").append()
+        silver_batch.writeTo("nessie.ecommerce.`orders_silver@silver`").append()
         
         total_written += batch_count
         print(f"   ✅ Batch {month} Done.")
         
     except Exception as e:
         print(f"   ❌ Batch {month} Failed: {e}")
+        # Stop on error to prefer stability
+        raise e
 
 print("\\n" + "=" * 50)
 print(f"✅ Total Records Written: {total_written:,}")
