@@ -29,7 +29,11 @@ def get_spark_session():
             .setAppName('gold_layer_builder')
             # Use localhost - script runs inside same container as Spark Master
             .set("spark.master", "spark://localhost:7077")
-            .set('spark.sql.shuffle.partitions', '200')  # Lower shuffle for aggregations
+            # Resource configuration to fit VM2 worker (4G worker, 2G executor)
+            .set('spark.executor.memory', '2g')
+            .set('spark.executor.cores', '1')
+            .set('spark.driver.memory', '2g')
+            .set('spark.sql.shuffle.partitions', '50')  # Lower shuffle for smaller cluster
             .set('spark.jars.packages', 
                  'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,'
                  'org.projectnessie.nessie-integrations:nessie-spark-extensions-3.3_2.12:0.67.0,'

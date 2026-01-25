@@ -9,14 +9,16 @@ services:
     image: alexmerced/spark33-notebook
     container_name: spark-worker
     hostname: spark-worker
+    ports:
+      - "8082:8081" # Worker Web UI
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://10.0.0.148:7077
       - SPARK_WORKER_CORES=2
-      - SPARK_WORKER_MEMORY=8G
-      - SPARK_EXECUTOR_MEMORY=4g
+      - SPARK_WORKER_MEMORY=4G
+      - SPARK_EXECUTOR_MEMORY=2g
       # Oracle Object Storage credentials
-      - AWS_REGION=${ORACLE_REGION}
+      - AWS_REGION=ap-mumbai-1
       - AWS_ACCESS_KEY_ID=${ORACLE_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${ORACLE_SECRET_KEY}
       - AWS_S3_ENDPOINT=${ORACLE_ENDPOINT}
@@ -25,11 +27,18 @@ services:
     volumes:
       - ./data:/home/jovyan/data
       - ./scripts:/home/jovyan/scripts
-    command: >
-      bash -c "/opt/spark/sbin/start-worker.sh spark://10.0.0.148:7077 && tail -f /dev/null"
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        echo "Starting Spark Worker connecting to spark://10.0.0.148:7077"
+        /opt/spark/sbin/start-worker.sh spark://10.0.0.148:7077 -c 2 -m 4G
+        sleep 5
+        echo "Worker started, tailing logs..."
+        tail -f /opt/spark/logs/*.out
     restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: "2.0"
-          memory: 10G
+          memory: 6G
