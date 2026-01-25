@@ -25,8 +25,8 @@ def get_spark_session():
     conf = (
         pyspark.SparkConf()
             .setAppName('gold_layer_builder')
-            # FIX 4: Use CLUSTER MODE to utilize VM2 Workers (Optimization)
-            .set("spark.master", "spark://spark-master:7077")
+            # Use VM1 private IP for Spark Master (cross-VM cluster)
+            .set("spark.master", "spark://10.0.0.148:7077")
             .set('spark.sql.shuffle.partitions', '200')  # Lower shuffle for aggregations
             .set('spark.jars.packages', 
                  'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,'

@@ -1,0 +1,35 @@
+# VM2 Worker Compose - Connects to Spark Master on VM1
+# Deploy this on VM2 (140.245.16.49)
+# VM1 Private IP: 10.0.0.148
+
+version: '3.8'
+
+services:
+  spark-worker:
+    image: alexmerced/spark33-notebook
+    container_name: spark-worker
+    hostname: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://10.0.0.148:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=8G
+      - SPARK_EXECUTOR_MEMORY=4g
+      # Oracle Object Storage credentials
+      - AWS_REGION=${ORACLE_REGION}
+      - AWS_ACCESS_KEY_ID=${ORACLE_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${ORACLE_SECRET_KEY}
+      - AWS_S3_ENDPOINT=${ORACLE_ENDPOINT}
+      - NESSIE_URI=http://10.0.0.148:19120/api/v1
+      - WAREHOUSE=${WAREHOUSE}
+    volumes:
+      - ./data:/home/jovyan/data
+      - ./scripts:/home/jovyan/scripts
+    command: >
+      bash -c "/opt/spark/sbin/start-worker.sh spark://10.0.0.148:7077 && tail -f /dev/null"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 10G
