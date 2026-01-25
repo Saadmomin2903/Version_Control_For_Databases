@@ -48,7 +48,7 @@ services:
     ports:
       - "8089:8080" # Airflow UI
     command: >
-      bash -c "export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$(echo $SUPABASE_JDBC_URL | sed 's/jdbc://' | sed "s|://|://postgres:$SUPABASE_PASSWORD@|") &&
+      bash -c "export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$(echo $SUPABASE_JDBC_URL | sed 's/jdbc://' | sed 's/postgresql:/postgresql+psycopg2:/') &&
                airflow db init &&
                airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
                airflow webserver"
@@ -66,7 +66,7 @@ services:
       - ./scripts:/opt/airflow/scripts
       - /var/run/docker.sock:/var/run/docker.sock
     command: >
-      bash -c "export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$(echo $SUPABASE_JDBC_URL | sed 's/jdbc://' | sed "s|://|://postgres:$SUPABASE_PASSWORD@|") &&
+      bash -c "export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$(echo $SUPABASE_JDBC_URL | sed 's/jdbc://' | sed 's/postgresql:/postgresql+psycopg2:/') &&
                airflow scheduler"
     restart: unless-stopped
 
