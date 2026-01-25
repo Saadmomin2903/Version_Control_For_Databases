@@ -8,11 +8,10 @@ services:
   spark-worker:
     image: alexmerced/spark33-notebook
     container_name: spark-worker
-    hostname: spark-worker
+    # Use host network so container can reach VM1's private IP directly
+    network_mode: host
     extra_hosts:
       - "spark-master:10.0.0.148" # VM1 private IP for executor→driver communication
-    ports:
-      - "8082:8081" # Worker Web UI
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://10.0.0.148:7077
@@ -39,8 +38,3 @@ services:
         echo "Worker started, tailing logs..."
         tail -f /opt/spark/logs/*.out
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 6G
