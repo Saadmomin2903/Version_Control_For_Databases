@@ -9,6 +9,8 @@ services:
     image: alexmerced/spark33-notebook
     container_name: spark-worker
     hostname: spark-worker
+    extra_hosts:
+      - "spark-master:10.0.0.148" # VM1 private IP for executor→driver communication
     ports:
       - "8082:8081" # Worker Web UI
     environment:
