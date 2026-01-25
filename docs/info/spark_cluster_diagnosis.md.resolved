@@ -1,0 +1,41 @@
+# Spark Cluster Troubleshooting Report
+**Date**: 2026-01-25
+**Status**: [PAUSED] - Master Fixed, Worker Registration Pending
+
+## 1. Executive Summary
+We successfully resolved the critical "Connection Refused" error between the Driver and the Spark Master. The Master is now reachable. However, the build job failed with "Initial job has not accepted any resources" because the Spark Workers have not yet successfully registered with the restarted Master.
+
+## 2. Issue Breakdown
+
+### Issue A: Driver Connection Refused (FIXED)
+*   **Symptom**: `Connection refused: spark-master:7077`
+*   **Root Cause**: The Java Spark Master process inside the `spark-master` container had crashed/died, even though the container itself was "Up" and serving the Jupyter UI on port 8888. Diagnostic `ps aux` confirmed the process was missing.
+*   **Fix Applied**:
+    *   Manually restarted the Master process: `docker exec spark-master /opt/spark/sbin/start-master.sh`
+*   **Result**: Port 7077 is now open (`netstat` confirmed), and the Driver successfully connects.
+
+### Issue B: No Resources / Worker Registration Failure (IN PROGRESS)
+*   **Symptom**: `WARN TaskSchedulerImpl: Initial job has not accepted any resources`.
+*   **Root Cause**: Spark Workers (VM2) failed to reconnect to the new Master process ID.
+*   **Diagnostics**:
+    *   Worker logs (`lakehouse-spark-worker-1`) showed repeated `io.netty` connection errors.
+    *   This typically happens when Workers cache the old Master IP/Session or encounter a race condition during restart.
+*   **Actions Taken**:
+    *   Identified correct Docker Compose filename: [docker-compose-spark.yml](file:///Users/saadmomin/Documents/Version_Control_For_Databases/docker-compose-spark.yml) (was previously failing with [docker-compose.yml](file:///Users/saadmomin/Documents/Version_Control_For_Databases/docker-compose.yml) not found).
+    *   Executed full stack restart: `docker-compose -f docker-compose-spark.yml -f docker-compose-workers.yml down && up -d`.
+*   **Current State**: The full restart command was issued. We paused before verifying the final registration status in the logs.
+
+## 3. Configuration Discoveries
+*   **Main Compose File**: `~/lakehouse/docker-compose-spark.yml`
+*   **Worker Compose File**: `~/lakehouse/docker-compose-workers.yml`
+*   **Worker Container Name**: `lakehouse-spark-worker-1` (NOT `spark-worker-1`)
+
+## 4. Next Steps (When Resuming)
+1.  **Verify Worker Registration**:
+    ```bash
+    docker logs spark-master | grep "Registering worker"
+    ```
+2.  **Run Distributed Build** (Once "Registering worker" appears):
+    ```bash
+    docker exec spark-master python3 /home/jovyan/scripts/gold/build_gold_layer.py
+    ```
