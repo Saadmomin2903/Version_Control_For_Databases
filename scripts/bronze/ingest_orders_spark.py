@@ -22,7 +22,7 @@ def create_spark_session():
         .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.3_2.12:0.67.0,software.amazon.awssdk:bundle:2.17.178,org.apache.hadoop:hadoop-aws:3.3.1") \
         .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions") \
         .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog") \
-        .config("spark.sql.catalog.nessie.uri", "http://nessie:19120/api/v1") \
+        .config("spark.sql.catalog.nessie.uri", os.environ.get("NESSIE_URI", "http://nessie:19120/api/v1")) \
         .config("spark.sql.catalog.nessie.ref", "bronze") \
         .config("spark.sql.catalog.nessie.authentication.type", "NONE") \
         .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog") \
