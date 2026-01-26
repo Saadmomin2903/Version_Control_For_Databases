@@ -138,7 +138,7 @@ def build_gold_layer():
     # 1. Create table with Fanout enabled
     spark.sql(f"""
         CREATE OR REPLACE TABLE nessie.ecommerce.customer_stats_gold (
-            customer_id LONG,
+            customer_id STRING,
             total_spend DOUBLE,
             total_orders LONG,
             first_order_date DATE,
