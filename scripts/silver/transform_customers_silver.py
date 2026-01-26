@@ -16,7 +16,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from utils.quality_checks import QualityChecker
 
 # Configuration
-NESSIE_URI = os.getenv("NESSIE_URI", "http://nessie:19120/api/v1")
+NESSIE_URI = os.getenv("NESSIE_URI", "http://172.18.0.2:19120/api/v1")
 WAREHOUSE = os.getenv("WAREHOUSE", "s3a://lakehouse/warehouse")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "admin")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "password123")

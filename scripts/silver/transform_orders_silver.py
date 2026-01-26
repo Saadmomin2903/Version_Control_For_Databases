@@ -18,7 +18,7 @@ from pyspark.sql import functions as F
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 # Configuration - MUST MATCH Bronze ingestion (Oracle Object Storage)
-NESSIE_URI = os.getenv("NESSIE_URI", "http://nessie:19120/api/v1")
+NESSIE_URI = os.getenv("NESSIE_URI", "http://172.18.0.2:19120/api/v1")
 WAREHOUSE = "s3a://lakehouse-prod/warehouse"  # Oracle Object Storage
 AWS_ACCESS_KEY = "962c9f862226831e4edea90cfcfafb8a8dffcd51"  # Oracle OCI Key
 AWS_SECRET_KEY = "sd2rGU918DTmn35E4xJ8EV7BX2XUt7DkqC8v6WDNDUw="  # Oracle OCI Secret

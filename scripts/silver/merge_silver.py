@@ -12,7 +12,7 @@ import pyspark
 from pyspark.sql import SparkSession
 
 # Configuration - MUST MATCH Bronze/Silver (Oracle Object Storage)
-NESSIE_URI = os.getenv("NESSIE_URI", "http://nessie:19120/api/v1")
+NESSIE_URI = os.getenv("NESSIE_URI", "http://172.18.0.2:19120/api/v1")
 WAREHOUSE = "s3a://lakehouse-prod/warehouse"
 AWS_ACCESS_KEY = "962c9f862226831e4edea90cfcfafb8a8dffcd51"
 AWS_SECRET_KEY = "sd2rGU918DTmn35E4xJ8EV7BX2XUt7DkqC8v6WDNDUw="

@@ -11,7 +11,7 @@ import time
 import os
 
 # Use hostname 'nessie' by default for container-to-container communication
-NESSIE_URL = os.getenv("NESSIE_URI", "http://nessie:19120/api/v1")
+NESSIE_URL = os.getenv("NESSIE_URI", "http://172.18.0.2:19120/api/v1")
 BRANCHES = ["bronze", "silver", "gold"]
 
 def wait_for_nessie(max_retries=30):

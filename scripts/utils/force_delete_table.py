@@ -2,7 +2,7 @@ import requests
 import os
 import json
 
-NESSIE_URL = os.getenv("NESSIE_URI", "http://nessie:19120/api/v1")
+NESSIE_URL = os.getenv("NESSIE_URI", "http://172.18.0.2:19120/api/v1")
 BRANCH = "bronze"  # We'll clean bronze first
 TABLE_KEY = ["ecommerce", "orders_bronze"]
 

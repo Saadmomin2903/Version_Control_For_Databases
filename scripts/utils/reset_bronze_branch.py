@@ -5,7 +5,7 @@ import time
 
 # Use hostname 'nessie' by default for container-to-container communication
 # But allow override if running from host or different setup
-NESSIE_URL = os.getenv("NESSIE_URI", "http://nessie:19120/api/v1")
+NESSIE_URL = os.getenv("NESSIE_URI", "http://172.18.0.2:19120/api/v1")
 BRANCH_TO_RESET = "bronze"
 SOURCE_REF = "main"
 
