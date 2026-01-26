@@ -116,33 +116,32 @@ def ingest_month(year_val, month_val, dry_run=False):
     finally:
         spark.stop()
 
-def ingest_all_months(start_month=5, end_month=11, dry_run=False):
+def ingest_all_months_range():
     """
-    Ingest multiple months sequentially
-    
-    Args:
-        start_month: Starting month (5 = May)
-        end_month: Ending month (11 = November)
-        dry_run: If True, only count without writing
+    Ingest all months from Dec 2019 to Nov 2020
+    Data spans: 2019-12 through 2020-11 (14 months total)
     """
-    year = 2020
     total_records = 0
     
     print("\n" + "="*60)
-    print("🚀 FULL DATASET INGESTION")
+    print("🚀 FULL DATASET INGESTION (Dec 2019 - Nov 2020)")
     print("="*60)
     
     # Show current state
     current_count = get_current_count()
     print(f"📊 Current Bronze table count: {current_count:,} records")
     
-    if dry_run:
-        print("\n⚠️  DRY RUN MODE - NO DATA WILL BE WRITTEN\n")
+    # Process Dec 2019
+    try:
+        records = ingest_month(2019, 12, dry_run=False)
+        total_records += records
+    except Exception as e:
+        print(f"\n❌ Failed at Dec 2019: {e}")
     
-    # Process each month
-    for month_val in range(start_month, end_month + 1):
+    # Process Jan-Nov 2020
+    for month_val in range(1, 12):  # 1 through 11 (Jan to Nov)
         try:
-            records = ingest_month(year, month_val, dry_run=dry_run)
+            records = ingest_month(2020, month_val, dry_run=False)
             total_records += records
         except Exception as e:
             print(f"\n❌ Failed at month {month_val}, stopping ingestion")
@@ -154,25 +153,19 @@ def ingest_all_months(start_month=5, end_month=11, dry_run=False):
     print("📈 INGESTION SUMMARY")
     print("="*60)
     print(f"Total new records: {total_records:,}")
-    if not dry_run:
-        final_count = get_current_count()
-        print(f"Final Bronze count: {final_count:,}")
-        print(f"Expected: {current_count + total_records:,}")
-        if final_count == current_count + total_records:
-            print("✅ Counts match!")
-        else:
-            print("⚠️  Count mismatch!")
+    final_count = get_current_count()
+    print(f"Final Bronze count: {final_count:,}")
+    print(f"Expected: {current_count + total_records:,}")
+    if final_count == current_count + total_records:
+        print("✅ Counts match!")
+    else:
+        print("⚠️  Count mismatch!")
 
 if __name__ == "__main__":
     import sys
     
-    # Parse arguments
-    dry_run = "--dry-run" in sys.argv
-    
-    if dry_run:
-        print("\n🔍 Running in DRY RUN mode (count only)\n")
-    
-    # Ingest May-November 2020
-    ingest_all_months(start_month=5, end_month=11, dry_run=dry_run)
+    # Ingest ALL data: Dec 2019 - Nov 2020
+    ingest_all_months_range()
     
     print("\n✅ Full dataset ingestion complete!")
+
