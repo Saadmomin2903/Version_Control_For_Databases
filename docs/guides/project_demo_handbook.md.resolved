@@ -1,0 +1,83 @@
+# 🎓 Data Lakehouse Project Demonstration Handbook
+
+## 🌟 Project Overview
+This project implements a **Git-for-Data Lakehouse Architecture**. It solves the problem of "messy, unreliable data lakes" by introducing software engineering best practices—specifically **Version Control** and **CI/CD**—to Data Engineering.
+
+### Core Technology Stack
+- **Storage**: Apache Iceberg (Open Table Format) + MinIO/Oracle Object Storage.
+- **Version Control**: Project Nessie (Git-like branching, committing, merging for data).
+- **Compute**: Apache Spark (Distributed Processing).
+- **Orchestration**: Apache Airflow (Workflow Management).
+- **Access**: Trino (High-Speed Distributed SQL Engine).
+- **Quality**: Great Expectations (Data Validation).
+
+---
+
+## 🏗️ Architecture Explained (The "Why")
+
+### 1. The "WAP" Pattern (Write-Audit-Publish)
+Instead of writing data directly to production tables (which risks corruption), we use a **Branching Model**:
+1.  **Write**: ETL jobs write data to a temporary branch (e.g., `etl/silver_updates`).
+2.  **Audit**: We run automated quality checks (Great Expectations) on this branch.
+3.  **Publish**:
+    *   *If Checks Pass*: We merge the branch to `main`.
+    *   *If Checks Fail*: We block the merge or quarantine the data.
+    *   *Our Implementation*: We currently use a **Permissive Strategy** (Warn-Only) to ensure pipeline continuity on limited resources, while still logging data issues.
+
+### 2. Medallion Architecture
+- **Bronze**: Raw data ingestion (Parquet).
+- **Silver**: Cleaned, deduplicated, and validated data (Iceberg).
+- **Gold**: Aggregated business-level metrics (e.g., "Sales by Region").
+
+---
+
+## 🛠️ What We Built (The "How")
+
+### Phase 1: Distributed Spark Cluster & Data Quality
+*We moved from a single machine to a distributed cluster.*
+*   **Challenges Solved**:
+    *   **Networking**: Configured Docker `host` mode so Spark Master (VM1) can talk to Workers (VM2) seamlessly.
+    *   **Resource Management**: Tuned memory (4GB vs 2GB) to prevent crashes.
+    *   **Data Quality**: Integrated `Great Expectations` into the Spark pipeline. We validate `price > 0` and `id is not null` before promoting data to Silver.
+
+### Phase 2: Orchestration with Airflow
+*We automated the manual scripts.*
+*   **The Pipeline**: A DAG (`medallion_pipeline`) triggers the jobs in order: `Bronze -> Silver -> Gold`.
+*   **Dynamic Configuration**: Airflow automatically connects to our database using secure, generated credentials.
+
+### Phase 3: Access with Trino
+*We "Unloked" the data.*
+*   **Problem**: Spark is hard for analysts to use (requires Python/Scala).
+*   **Solution**: Trino provides a standard **SQL Interface**.
+*   **Integration**: Trino connects to Nessie to see the exact same branches and commits as Spark. Users can query standard tables (`ecommerce.orders_silver`) using standard SQL (`SELECT * FROM ...`).
+
+---
+
+## 🎬 Demo Script (Walkthrough)
+
+**Step 1: Show the Architecture (Nessie UI)**
+*   **URL**: `http://140.238.224.207:19120`
+*   **What to say**: "This is our 'Git for Data' server. You can see the `main` branch and the history of every single commit made by our ETL pipelines."
+
+**Step 2: Show the Orchestration (Airflow UI)**
+*   **URL**: `http://140.238.224.207:8089` (User/Pass: `admin`/`admin`)
+*   **Action**: Show the `medallion_pipeline` DAG.
+*   **What to say**: "Airflow manages the dependencies. It ensures Bronze runs before Silver. If Data Quality fails, it stops the pipeline here."
+
+**Step 3: Show the Data Access (Trino)**
+*   **Tool**: DBeaver or Terminal
+*   **Connection**: `140.238.224.207:8090`
+*   **Action**: Run a query:
+    ```sql
+    SELECT count(*) FROM nessie.ecommerce.orders_silver;
+    ```
+*   **What to say**: "Analyst teams don't need to know Spark or Iceberg. They just write SQL. Trino handles the complexity of querying the distributed files."
+
+---
+
+## 📋 Key Configuration Files (Evidence of Work)
+
+1.  **Orchestration**: [docker-compose-production.yml](file:///Users/saadmomin/Documents/Version_Control_For_Databases/docker-compose-production.yml) (Airflow services).
+2.  **Access**: [docker-compose-trino.yml](file:///Users/saadmomin/Documents/Version_Control_For_Databases/docker-compose-trino.yml) (Trino service).
+3.  **Pipeline Logic**: [scripts/silver/transform_orders_silver.py](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/silver/transform_orders_silver.py) (The main ETL logic with WAP pattern).
+4.  **Quality Rules**: [scripts/quality/silver_expectations.py](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/quality/silver_expectations.py) (Validation logic).

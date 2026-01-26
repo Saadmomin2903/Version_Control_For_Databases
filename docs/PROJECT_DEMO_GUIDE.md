@@ -161,13 +161,29 @@ spark.stop()
 
 ---
 
-## 📊 6. Web UIs Available
+---
+
+## 📊 6. Demo: SQL Analytics (Consumption Layer) (3 minutes)
+
+### Interactive SQL via CLI (VM3)
+Demonstrate standard SQL access to the data:
+
+```bash
+ssh -i key3/oracle-vm3.key ubuntu@161.118.185.218 \
+  "docker exec lakehouse-thrift /opt/spark/bin/beeline -u jdbc:hive2://localhost:10000 -n admin -p admin -e \"SELECT count(*) as total_rows FROM nessie.ecommerce.orders_silver\""
+```
+*Expected Result: 3.1M+ rows returned via JDBC driver.*
+
+---
+
+## 🌍 7. Web UIs Available
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
 | **Airflow** | http://140.238.224.207:8080 | admin / admin |
 | **Spark Master** | http://140.238.224.207:8080 | (no login) |
 | **Nessie API** | http://140.238.224.207:19120/api/v1 | REST API |
+| **SQL Engine** | `jdbc:hive2://161.118.185.218:10000` | (JDBC) |
 
 ---
 
@@ -177,12 +193,13 @@ spark.stop()
 > "Today I'll demonstrate a data lakehouse with version control - like Git for databases. 
 > We're processing 411 million e-commerce events through a medallion architecture."
 
-### Demo Flow (8 min)
+### Demo Flow (10 min)
 1. **Show Architecture** - Explain Bronze/Silver/Gold layers
 2. **Run Pipeline** - Execute Silver transform (show 3M records)
 3. **Show Gold Tables** - Query daily_sales_gold 
 4. **Version Control** - List branches, show commit history
 5. **Time Travel** - Query table at previous snapshot
+6. **SQL Consumption** - Connect via JDBC (Simulate Tableau/BI)
 
 ### Closing (1 min)
 > "This enables data teams to treat data as code - with branches, commits, 
