@@ -50,11 +50,8 @@ def get_spark_session():
             .set('spark.sql.catalog.nessie.authentication.type', 'NONE')
             .set('spark.sql.catalog.nessie.catalog-impl', 'org.apache.iceberg.nessie.NessieCatalog')
             .set('spark.sql.catalog.nessie.warehouse', WAREHOUSE)
-            .set('spark.sql.catalog.nessie.io-impl', 'org.apache.iceberg.aws.s3.S3FileIO')
-            .set('spark.sql.catalog.nessie.s3.endpoint', AWS_S3_ENDPOINT)
-            # Explicit S3 client region configuration (required for Oracle Object Storage)
-            .set('spark.sql.catalog.nessie.s3.region', AWS_REGION)
-            .set('spark.sql.catalog.nessie.client.region', AWS_REGION)
+            # Use Hadoop S3A FileSystem instead of S3FileIO to avoid SDK v2 conflict
+            .set('spark.sql.catalog.nessie.io-impl', 'org.apache.iceberg.hadoop.HadoopFileIO')
             .set('spark.hadoop.fs.s3a.access.key', AWS_ACCESS_KEY)
             .set('spark.hadoop.fs.s3a.secret.key', AWS_SECRET_KEY)
             .set('spark.hadoop.fs.s3a.endpoint', AWS_S3_ENDPOINT)
