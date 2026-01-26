@@ -38,7 +38,8 @@ conf = (
              'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,'
              'org.projectnessie.nessie-integrations:nessie-spark-extensions-3.3_2.12:0.67.0,'
              'software.amazon.awssdk:bundle:2.17.178,'
-             'software.amazon.awssdk:url-connection-client:2.17.178')
+             'software.amazon.awssdk:url-connection-client:2.17.178,'
+             'org.apache.hadoop:hadoop-aws:3.3.1')
         .set('spark.sql.extensions', 
              'org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,'
              'org.projectnessie.spark.extensions.NessieSparkSessionExtensions')
@@ -63,9 +64,10 @@ conf = (
 
 spark = SparkSession.builder.config(conf=conf).getOrCreate()
 
-# 1. Read Bronze
-print("📖 Reading Bronze Source...")
-bronze_df = spark.sql("SELECT * FROM nessie.ecommerce.`orders_bronze@bronze`")
+# 1. Read Bronze (from raw parquet files - Iceberg Bronze table has issues)
+print("📖 Reading Bronze Source (raw parquet)...")
+BRONZE_PATH = "s3a://lakehouse-prod/bronze/ecommerce/*.parquet"
+bronze_df = spark.read.parquet(BRONZE_PATH)
 
 # 2. Transformation Logic
 print("🔧 Transformations will be applied per batch (optimized)")
@@ -85,7 +87,7 @@ spark.sql("CREATE NAMESPACE IF NOT EXISTS nessie.ecommerce")
 # We need to define 'silver_final' structure here so we can create the empty table.
 # We read 0 records just to get the columns.
 print("   Inferring Schema...")
-_schema_df = spark.sql("SELECT * FROM nessie.ecommerce.`orders_bronze@bronze` LIMIT 1")
+_schema_df = bronze_df.limit(1)
 silver_final = _schema_df \
     .withColumnRenamed("user_id", "customer_id") \
     .withColumn("order_date", F.to_date(F.col("event_time"))) \
@@ -119,10 +121,7 @@ for day in days:
     try:
         # 1. READ FILTERED (Partition Pruning - Now by DAY)
         print(f"   Reading Bronze data for {day}...")
-        batch_bronze = spark.sql(f"""
-            SELECT * FROM nessie.ecommerce.`orders_bronze@bronze` 
-            WHERE date(event_time) = '{day}'
-        """)
+        batch_bronze = bronze_df.filter(F.to_date(F.col('event_time')) == day)
         
         # 2. TRANSFORM & DEDUP (Small Shuffle)
         print("   Transforming & Deduplicating...")
