@@ -11,6 +11,7 @@ All demo scripts and guides for showcasing the Data Lakehouse project.
 | **Complete Pipeline** | [PIPELINE_DEMO.md](PIPELINE_DEMO.md) | 10 min |
 | **Query Analytics** | [QUERY_ANALYTICS_DEMO.md](QUERY_ANALYTICS_DEMO.md) | 3 min |
 | **Airflow DAG** | [AIRFLOW_DAG_DEMO.md](AIRFLOW_DAG_DEMO.md) | 2 min |
+| **Architecture** | [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md) | 10 min |
 
 ---
 
