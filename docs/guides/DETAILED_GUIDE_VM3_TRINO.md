@@ -89,16 +89,16 @@ We need a special `.env` for VM3 that points to VM1's Nessie server.
     nano .env.trino
     ```
 
-3.  **Paste this Content** (Update the placeholders!):
+3.  **Paste this Content** (Already filled with your project values!):
     ```ini
     # --- ORACLE CLOUD STORAGE ---
-    ORACLE_ACCESS_KEY=[Paste from local oracle-s3-credentials.txt]
-    ORACLE_SECRET_KEY=[Paste from local oracle-s3-credentials.txt]
+    ORACLE_ACCESS_KEY=962c9f862226831e4edea90cfcfafb8a8dffcd51
+    ORACLE_SECRET_KEY=sd2rGU918DTmn35E4xJ8EV7BX2XUt7DkqC8v6WDNDUw=
     ORACLE_REGION=ap-mumbai-1
     ORACLE_ENDPOINT=https://bmcfe6z38foz.compat.objectstorage.ap-mumbai-1.oraclecloud.com
     
     # --- NESSIE (Running on VM1) ---
-    # Use VM1 PRIVATE IP here!
+    # VM1 PRIVATE IP (already confirmed)
     NESSIE_URI=http://10.0.0.148:19120/api/v1
     ```
 
