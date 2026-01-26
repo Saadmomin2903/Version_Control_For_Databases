@@ -136,6 +136,79 @@ def run_segmentation():
         print(profile.sort_values('monetary', ascending=False))
         
         # ==========================================
+        # Generate Visualizations
+        # ==========================================
+        print("\n📈 Generating visualizations...")
+        
+        try:
+            import matplotlib
+            matplotlib.use('Agg')  # Non-interactive backend for server
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+            
+            # Set style
+            sns.set_style("whitegrid")
+            plt.rcParams['figure.figsize'] = (14, 10)
+            
+            # Create 2x2 subplot
+            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+            
+            # 1. Segment Distribution (Pie Chart)
+            segment_counts = df['segment_name'].value_counts()
+            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A']
+            axes[0, 0].pie(segment_counts.values, labels=segment_counts.index, autopct='%1.1f%%',
+                          colors=colors, startangle=90)
+            axes[0, 0].set_title('Customer Segment Distribution', fontsize=14, fontweight='bold')
+            
+            # 2. Average Monetary Value by Segment (Bar Chart)
+            segment_monetary = df.groupby('segment_name')['monetary'].mean().sort_values(ascending=False)
+            bars = axes[0, 1].bar(range(len(segment_monetary)), segment_monetary.values, color=colors)
+            axes[0, 1].set_xticks(range(len(segment_monetary)))
+            axes[0, 1].set_xticklabels(segment_monetary.index, rotation=45, ha='right')
+            axes[0, 1].set_ylabel('Average Lifetime Value ($)', fontweight='bold')
+            axes[0, 1].set_title('Average Customer Value by Segment', fontsize=14, fontweight='bold')
+            axes[0, 1].grid(axis='y', alpha=0.3)
+            
+            # Add value labels on bars
+            for bar in bars:
+                height = bar.get_height()
+                axes[0, 1].text(bar.get_x() + bar.get_width()/2., height,
+                               f'${height:.0f}', ha='center', va='bottom', fontweight='bold')
+            
+            # 3. Frequency Distribution by Segment (Box Plot)
+            segment_order = df.groupby('segment_name')['monetary'].mean().sort_values(ascending=False).index
+            sns.boxplot(data=df, x='segment_name', y='frequency', order=segment_order, 
+                       palette=colors, ax=axes[1, 0])
+            axes[1, 0].set_xlabel('Segment', fontweight='bold')
+            axes[1, 0].set_ylabel('Purchase Frequency', fontweight='bold')
+            axes[1, 0].set_title('Purchase Frequency Distribution', fontsize=14, fontweight='bold')
+            axes[1, 0].tick_params(axis='x', rotation=45)
+            
+            # 4. Scatter: Frequency vs Monetary (colored by segment)
+            for segment in segment_order:
+                segment_data = df[df['segment_name'] == segment]
+                axes[1, 1].scatter(segment_data['frequency'], segment_data['monetary'], 
+                                 label=segment, alpha=0.6, s=50)
+            axes[1, 1].set_xlabel('Purchase Frequency', fontweight='bold')
+            axes[1, 1].set_ylabel('Lifetime Value ($)', fontweight='bold')
+            axes[1, 1].set_title('Customer Value vs Frequency', fontsize=14, fontweight='bold')
+            axes[1, 1].legend(loc='upper right')
+            axes[1, 1].grid(alpha=0.3)
+            
+            plt.tight_layout()
+            
+            # Save to file
+            viz_path = '/tmp/customer_segmentation_analysis.png'
+            plt.savefig(viz_path, dpi=300, bbox_inches='tight')
+            print(f"✅ Visualization saved to: {viz_path}")
+            plt.close()
+            
+        except ImportError:
+            print("⚠️  Matplotlib not available. Skipping visualizations.")
+        except Exception as e:
+            print(f"⚠️  Visualization error: {e}")
+        
+        # ==========================================
         # Write Results to Gold Layer
         # ==========================================
         print("\n💾 Writing segments to Gold layer...")
