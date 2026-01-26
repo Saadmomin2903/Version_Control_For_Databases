@@ -9,6 +9,8 @@ All demo scripts and guides for showcasing the Data Lakehouse project.
 | **Time Travel** | [TIME_TRAVEL_DEMO.md](TIME_TRAVEL_DEMO.md) | 5 min |
 | **Nessie Branches** | [NESSIE_BRANCHES_DEMO.md](NESSIE_BRANCHES_DEMO.md) | 3 min |
 | **Complete Pipeline** | [PIPELINE_DEMO.md](PIPELINE_DEMO.md) | 10 min |
+| **Query Analytics** | [QUERY_ANALYTICS_DEMO.md](QUERY_ANALYTICS_DEMO.md) | 3 min |
+| **Airflow DAG** | [AIRFLOW_DAG_DEMO.md](AIRFLOW_DAG_DEMO.md) | 2 min |
 
 ---
 
