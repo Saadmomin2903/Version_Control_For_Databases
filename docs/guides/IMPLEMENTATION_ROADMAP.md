@@ -741,10 +741,13 @@ ML team can use Superset for:
 - [ ] Deploy Airflow
 - [ ] Create medallion_pipeline DAG
 - [ ] Test end-to-end pipeline
-
+## Phase 4: Consumption Layer (VM3 Setup - NOW SPARK THRIFT)
+- [x] Create VM3 (Query Engine)
+- [x] **Pivot:** Deploy Spark Thrift Server (Replaces Trino due to compatibility)
+- [x] Validate JDBC connection on port 10000
+- [x] Verify read access to Nessie tables
+- [ ] Connect local DBeaver to VM3
 ### Week 2: Query Engine + ML Access
-- [ ] Deploy Trino
-- [ ] Configure Iceberg + Nessie catalog
 - [ ] Create LakehouseClient for ML team
 - [ ] Create example ML notebook
 - [ ] Test feature engineering workflow

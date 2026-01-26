@@ -1,4 +1,4 @@
-# VM3 - Trino Query Engine Server
+# VM3 - SQL Query Engine Server (Spark Thrift)
 
 **Created**: January 26, 2026
 
@@ -13,11 +13,25 @@ ssh -i key3/oracle-vm3.key ubuntu@161.118.185.218
 
 ---
 
+## Service: Spark Thrift Server (JDBC/ODBC)
+
+VM3 runs a **Spark Thrift Server** which provides a standard SQL interface (compatible with Hive/Impala drivers) to your Iceberg tables in Nessie.
+
+| Property | Value |
+|----------|-------|
+| **Service Name** | `lakehouse-thrift` |
+| **Port (JDBC)** | `10000` |
+| **Port (Web UI)** | `4040` |
+| **Authentication** | `NONE` (or custom) |
+| **JDBC URL** | `jdbc:hive2://161.118.185.218:10000` |
+
+---
+
 ## Instance Details
 
 | Property | Value |
 |----------|-------|
-| **Name** | lakehouse-trino-vm3 |
+| **Name** | lakehouse-trino-vm3 (repurposed for Thrift) |
 | **Status** | Running ✅ |
 | **Public IP** | `161.118.185.218` |
 | **Private IP** | `10.0.0.247` |
