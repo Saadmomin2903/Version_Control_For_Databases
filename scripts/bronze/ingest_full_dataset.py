@@ -14,7 +14,8 @@ from pyspark.sql.functions import col, to_date, year, month
 from datetime import datetime
 
 # Configuration
-DATA_PATH = os.getenv("DATA_PATH", "s3a://lakehouse-prod/bronze/ecommerce")
+# Data is in the locally mounted directory (accessible via Docker volume)
+DATA_PATH = os.getenv("DATA_PATH", "/home/jovyan/data/firebolt-raw")
 NESSIE_URI = os.getenv("NESSIE_URI", "http://nessie:19120/api/v1")
 WAREHOUSE = os.getenv("WAREHOUSE", "s3a://lakehouse-prod/warehouse")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY", "962c9f862226831e4edea90cfcfafb8a8dffcd51")
