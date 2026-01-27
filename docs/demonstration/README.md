@@ -6,6 +6,8 @@ All demo scripts and guides for showcasing the Data Lakehouse project.
 
 | Demo | File | Duration |
 |------|------|----------|
+| **Bronze Layer** | [BRONZE_LAYER_DEMO.md](BRONZE_LAYER_DEMO.md) | 5 min |
+| **Silver Layer** | [SILVER_LAYER_DEMO.md](SILVER_LAYER_DEMO.md) | 7 min |
 | **Time Travel** | [TIME_TRAVEL_DEMO.md](TIME_TRAVEL_DEMO.md) | 5 min |
 | **Nessie Branches** | [NESSIE_BRANCHES_DEMO.md](NESSIE_BRANCHES_DEMO.md) | 3 min |
 | **Complete Pipeline** | [PIPELINE_DEMO.md](PIPELINE_DEMO.md) | 10 min |
@@ -28,6 +30,6 @@ All demo scripts and guides for showcasing the Data Lakehouse project.
 
 | Layer | Records | Tables |
 |-------|---------|--------|
-| Bronze | 3.1M | orders_bronze |
-| Silver | 3.1M | orders_silver |
+| Bronze | 66.6M | orders_bronze |
+| Silver | 66.4M | orders_silver |
 | Gold | 4 tables | daily_sales, brand_performance, customer_stats, category_stats |
