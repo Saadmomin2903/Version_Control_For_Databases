@@ -33,6 +33,8 @@ def get_spark_session():
         .set('spark.jars.packages',
              'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,'
              'org.projectnessie.nessie-integrations:nessie-spark-extensions-3.3_2.12:0.67.0,'
+             'software.amazon.awssdk:bundle:2.17.178,'
+             'software.amazon.awssdk:url-connection-client:2.17.178,'
              'org.apache.hadoop:hadoop-aws:3.3.1')
         .set('spark.sql.extensions',
              'org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,'
@@ -42,12 +44,17 @@ def get_spark_session():
         .set('spark.sql.catalog.nessie.ref', 'bronze')
         .set('spark.sql.catalog.nessie.catalog-impl', 'org.apache.iceberg.nessie.NessieCatalog')
         .set('spark.sql.catalog.nessie.warehouse', WAREHOUSE)
-        .set('spark.sql.catalog.nessie.io-impl', 'org.apache.iceberg.hadoop.HadoopFileIO')
+        .set('spark.sql.catalog.nessie.io-impl', 'org.apache.iceberg.aws.s3.S3FileIO')
+        .set('spark.sql.catalog.nessie.s3.endpoint', AWS_S3_ENDPOINT)
+        .set('spark.sql.catalog.nessie.s3.region', 'ap-mumbai-1')
+        .set('spark.sql.catalog.nessie.client.region', 'ap-mumbai-1')
         .set('spark.hadoop.fs.s3a.access.key', AWS_ACCESS_KEY)
         .set('spark.hadoop.fs.s3a.secret.key', AWS_SECRET_KEY)
         .set('spark.hadoop.fs.s3a.endpoint', AWS_S3_ENDPOINT)
         .set('spark.hadoop.fs.s3a.path.style.access', 'true')
         .set('spark.hadoop.fs.s3a.connection.ssl.enabled', 'true')
+        .set('spark.hadoop.fs.s3a.impl', 'org.apache.hadoop.fs.s3a.S3AFileSystem')
+        .set('spark.hadoop.fs.s3a.endpoint.region', 'ap-mumbai-1')
     )
     return SparkSession.builder.config(conf=conf).getOrCreate()
 

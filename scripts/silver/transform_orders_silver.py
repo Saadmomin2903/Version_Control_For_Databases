@@ -64,10 +64,9 @@ conf = (
 
 spark = SparkSession.builder.config(conf=conf).getOrCreate()
 
-# 1. Read Bronze (from raw parquet files - Iceberg Bronze table has issues)
-print("📖 Reading Bronze Source (raw parquet)...")
-BRONZE_PATH = "s3a://lakehouse-prod/bronze/ecommerce/*.parquet"
-bronze_df = spark.read.parquet(BRONZE_PATH)
+# 1. Read Bronze from the CORRECTED Iceberg table
+print("📖 Reading Bronze Source from nessie.ecommerce.orders_bronze...")
+bronze_df = spark.table("nessie.ecommerce.orders_bronze")
 
 # 2. Transformation Logic
 print("🔧 Transformations will be applied per batch (optimized)")
@@ -107,21 +106,36 @@ spark.sql("""
 """)
 print("✓ Table structure created successfully (Fresh).")
 
-# 5. Get Batches (Days - Reduced for VM constraints)
+# 5. Get Batches (Monthly - For Full Dataset Processing)
 print("📅 Identifying Batches...")
-# CRITICAL FIX: 1 month = 66M records = Too big for 32GB disk during shuffle
-# Process 1 day at a time (~2M records) to stay within disk limits
-days = ['2020-04-01', '2020-04-02']  # Sample 2 days for demo
-print(f"✓ Using batches: {days}")
+# Process data MONTHLY to handle the 301.8M records efficiently
+# Dec 2019, Jan-Apr 2020 (5 months total)
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+
+# Generate list of year-month tuples
+months = []
+start = datetime(2019, 12, 1)
+end = datetime(2020, 4, 30)
+current = start
+while current <= end:
+    months.append((current.year, current.month))
+    current += relativedelta(months=1)
+
+print(f"✓ Using {len(months)} monthly batches: {months}")
 
 # 6. Process & Append Batches
 total_written = 0
-for day in days:
-    print(f"\n🔄 Processing Batch: {day}")
+for year, month in months:
+    month_str = f"{year}-{month:02d}"
+    print(f"\n🔄 Processing Batch: {month_str}")
     try:
-        # 1. READ FILTERED (Partition Pruning - Now by DAY)
-        print(f"   Reading Bronze data for {day}...")
-        batch_bronze = bronze_df.filter(F.to_date(F.col('event_time')) == day)
+        # 1. READ FILTERED (Partition Pruning - By MONTH)
+        print(f"   Reading Bronze data for {month_str}...")
+        batch_bronze = bronze_df.filter(
+            (F.year(F.col('event_time')) == year) & 
+            (F.month(F.col('event_time')) == month)
+        )
         
         # 2. TRANSFORM & DEDUP (Small Shuffle)
         print("   Transforming & Deduplicating...")
@@ -135,17 +149,17 @@ for day in days:
 
         batch_count = silver_batch.count()
         if batch_count == 0:
-            print(f"   ⚠️ Skipping empty batch: {day}")
+            print(f"   ⚠️ Skipping empty batch: {month_str}")
             continue
             
         print(f"   Writing {batch_count:,} records...")
         silver_batch.writeTo("nessie.ecommerce.`orders_silver@silver`").append()
         
         total_written += batch_count
-        print(f"   ✅ Batch {day} Done.")
+        print(f"   ✅ Batch {month_str} Done.")
         
     except Exception as e:
-        print(f"   ❌ Batch {day} Failed: {e}")
+        print(f"   ❌ Batch {month_str} Failed: {e}")
         # Stop on error to prefer stability
         raise e
 
