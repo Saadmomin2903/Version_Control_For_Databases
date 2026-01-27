@@ -45,7 +45,7 @@ conf = (
              'org.projectnessie.spark.extensions.NessieSparkSessionExtensions')
         .set('spark.sql.catalog.nessie', 'org.apache.iceberg.spark.SparkCatalog')
         .set('spark.sql.catalog.nessie.uri', NESSIE_URI)
-        .set('spark.sql.catalog.nessie.ref', 'main') 
+        .set('spark.sql.catalog.nessie.ref', 'silver') 
         .set('spark.sql.catalog.nessie.authentication.type', 'NONE')
         .set('spark.sql.catalog.nessie.catalog-impl', 'org.apache.iceberg.nessie.NessieCatalog')
         .set('spark.sql.catalog.nessie.warehouse', WAREHOUSE)
@@ -64,9 +64,9 @@ conf = (
 
 spark = SparkSession.builder.config(conf=conf).getOrCreate()
 
-# 1. Read Bronze from the CORRECTED Iceberg table
-print("📖 Reading Bronze Source from nessie.ecommerce.orders_bronze...")
-bronze_df = spark.table("nessie.ecommerce.orders_bronze")
+# 1. Read Bronze from the CORRECTED Iceberg table on the bronze branch
+print("📖 Reading Bronze Source from nessie.ecommerce.`orders_bronze@bronze`...")
+bronze_df = spark.table("nessie.ecommerce.`orders_bronze@bronze`")
 
 # 2. Transformation Logic
 print("🔧 Transformations will be applied per batch (optimized)")
@@ -116,7 +116,7 @@ from dateutil.relativedelta import relativedelta
 # Generate list of year-month tuples
 months = []
 start = datetime(2019, 12, 1)
-end = datetime(2020, 4, 30)
+end = datetime(2020, 11, 30)
 current = start
 while current <= end:
     months.append((current.year, current.month))

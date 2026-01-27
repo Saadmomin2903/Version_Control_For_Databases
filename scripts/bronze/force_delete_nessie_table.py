@@ -11,7 +11,7 @@ import os
 
 NESSIE_URI = "http://172.18.0.2:19120/api/v1"
 BRANCH = "main"
-TABLE_KEY = ["ecommerce", "orders_bronze"]
+TABLE_KEY = ["ecommerce", "orders_silver"]
 
 def get_branch_head():
     url = f"{NESSIE_URI}/trees/tree/{BRANCH}"
