@@ -64,7 +64,7 @@ df = spark.read.csv(
     "/home/jovyan/data/raw/customers.csv",
     header=True,
     inferSchema=True
-).limit(1000)
+).limit(50)
 record_count = df.count()
 print(f"✓ Loaded {record_count} records")
 

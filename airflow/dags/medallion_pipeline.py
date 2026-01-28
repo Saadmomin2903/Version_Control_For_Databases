@@ -30,7 +30,7 @@ dag = DAG(
 # Executes the bronze ingestion script inside the Spark container
 build_bronze = BashOperator(
     task_id='build_bronze_layer',
-    bash_command='docker exec lakehouse-spark python3 /home/jovyan/scripts/bronze/build_bronze_layer.py',
+    bash_command='ssh -o StrictHostKeyChecking=no -i /opt/airflow/dags/keys/oracle-vm1.key ubuntu@127.0.0.1 "docker exec lakehouse-spark python3 /home/jovyan/scripts/bronze/build_bronze_layer.py"',
     dag=dag,
 )
 
@@ -41,7 +41,7 @@ build_bronze = BashOperator(
 # This will FAIL if validation fails, stopping the pipeline (WAP)
 build_silver = BashOperator(
     task_id='build_silver_layer',
-    bash_command='docker exec lakehouse-spark python3 /home/jovyan/scripts/silver/build_silver_layer.py',
+    bash_command='ssh -o StrictHostKeyChecking=no -i /opt/airflow/dags/keys/oracle-vm1.key ubuntu@127.0.0.1 "docker exec lakehouse-spark python3 /home/jovyan/scripts/silver/build_silver_layer.py"',
     dag=dag,
 )
 
@@ -51,7 +51,7 @@ build_silver = BashOperator(
 # Runs aggregations on validated Silver data
 build_gold = BashOperator(
     task_id='build_gold_layer',
-    bash_command='docker exec lakehouse-spark python3 /home/jovyan/scripts/gold/build_gold_layer.py',
+    bash_command='ssh -o StrictHostKeyChecking=no -i /opt/airflow/dags/keys/oracle-vm1.key ubuntu@127.0.0.1 "docker exec lakehouse-spark python3 /home/jovyan/scripts/gold/build_gold_layer.py"',
     dag=dag,
 )
 

@@ -46,7 +46,7 @@ def ingest_orders(spark):
     print(f"Reading from: {input_path}")
     print("This may take a few minutes...")
     
-    df = spark.read.parquet(input_path).limit(1000)
+    df = spark.read.parquet(input_path).limit(50)
     
     # Cache to avoid re-reading for count and write
     # df.cache() 
