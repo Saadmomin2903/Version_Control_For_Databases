@@ -38,7 +38,7 @@ The Bronze layer is fully searchable via our interactive Jupyter environment on 
 
 ### 🔗 Access Details
 - **URL:** [http://140.245.16.49:8888](http://140.245.16.49:8888)
-- **Token:** `c2595d2830639ad3a5cdfa4cb43aa649dedb362084ab932f`
+- **Token:** `9b1e7d6cd2fbebc22ebd79f33cafc0c4b7563171098f7a77`
 
 ### � Step 1: Initialize Spark (Paste in Cell 1)
 ```python

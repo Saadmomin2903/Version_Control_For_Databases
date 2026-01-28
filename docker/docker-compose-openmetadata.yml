@@ -1,0 +1,52 @@
+version: "3.7"
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.16.3
+    container_name: openmetadata_es
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  db:
+    image: mysql:8.0.28
+    container_name: openmetadata_mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=openmetadata_db
+      - MYSQL_USER=openmetadata_user
+      - MYSQL_PASSWORD=openmetadata_password
+    ports:
+      - "3306:3306"
+
+  openmetadata:
+    image: openmetadata/server:0.13.2
+    container_name: openmetadata_server
+    environment:
+      - OPENMETADATA_URL=http://localhost:8585
+      - DB_DRIVER_CLASS=com.mysql.cj.jdbc.Driver
+      - DB_SCHEME=mysql
+      - DB_USE_SSL=false
+      - DB_USER=openmetadata_user
+      - DB_PASSWORD=openmetadata_password
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=openmetadata_db
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
+      - ES_SCHEME=http
+    ports:
+      - "8585:8585"
+    depends_on:
+      - elasticsearch
+      - db
+
+networks:
+  default:
+    name: openmetadata_network

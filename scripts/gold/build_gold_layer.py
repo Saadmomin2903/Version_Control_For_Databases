@@ -30,17 +30,16 @@ def get_spark_session():
             # CRITICAL: Driver host must be reachable from VM2 workers
             .set("spark.driver.host", "10.0.0.148")  # VM1 private IP
             .set("spark.driver.bindAddress", "0.0.0.0")
-            # Resource configuration to fit VM2 worker (4G worker, 2G executor)
-            .set('spark.executor.memory', '2g')
-            .set('spark.executor.cores', '1')
-            .set('spark.driver.memory', '2g')
-            .set('spark.sql.shuffle.partitions', '50')  # Lower shuffle for smaller cluster
+            # Resource configuration for production scale (300M records)
+            .set('spark.executor.memory', '4g')
+            .set('spark.executor.cores', '2')
+            .set('spark.driver.memory', '4g')
+            .set('spark.sql.shuffle.partitions', '256') 
             .set('spark.jars.packages', 
                  'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,'
                  'org.projectnessie.nessie-integrations:nessie-spark-extensions-3.3_2.12:0.67.0,'
                  'software.amazon.awssdk:bundle:2.17.178,'
-                 'software.amazon.awssdk:url-connection-client:2.17.178,'
-                 'org.apache.hadoop:hadoop-aws:3.3.1')
+                 'software.amazon.awssdk:url-connection-client:2.17.178')
             .set('spark.sql.extensions', 
                  'org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,'
                  'org.projectnessie.spark.extensions.NessieSparkSessionExtensions')
@@ -50,15 +49,19 @@ def get_spark_session():
             .set('spark.sql.catalog.nessie.authentication.type', 'NONE')
             .set('spark.sql.catalog.nessie.catalog-impl', 'org.apache.iceberg.nessie.NessieCatalog')
             .set('spark.sql.catalog.nessie.warehouse', WAREHOUSE)
-            # Use Hadoop S3A FileSystem instead of S3FileIO to avoid SDK v2 conflict
-            .set('spark.sql.catalog.nessie.io-impl', 'org.apache.iceberg.hadoop.HadoopFileIO')
+            .set('spark.sql.catalog.nessie.io-impl', 'org.apache.iceberg.aws.s3.S3FileIO')
+            .set('spark.sql.catalog.nessie.s3.endpoint', AWS_S3_ENDPOINT)
+            .set('spark.sql.catalog.nessie.s3.region', AWS_REGION)
+            .set('spark.sql.catalog.nessie.s3.path-style-access', 'true')
+            .set('spark.sql.catalog.nessie.client.region', AWS_REGION)
+            .set('spark.sql.catalog.nessie.s3.access-key-id', AWS_ACCESS_KEY)
+            .set('spark.sql.catalog.nessie.s3.secret-access-key', AWS_SECRET_KEY)
             .set('spark.hadoop.fs.s3a.access.key', AWS_ACCESS_KEY)
             .set('spark.hadoop.fs.s3a.secret.key', AWS_SECRET_KEY)
             .set('spark.hadoop.fs.s3a.endpoint', AWS_S3_ENDPOINT)
             .set('spark.hadoop.fs.s3a.path.style.access', 'true')
             .set('spark.hadoop.fs.s3a.connection.ssl.enabled', 'true')
             .set('spark.hadoop.fs.s3a.impl', 'org.apache.hadoop.fs.s3a.S3AFileSystem')
-            # AWS SDK region configuration
             .set('spark.hadoop.fs.s3a.endpoint.region', AWS_REGION)
     )
     return SparkSession.builder.config(conf=conf).getOrCreate()

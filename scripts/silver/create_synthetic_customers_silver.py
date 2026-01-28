@@ -53,6 +53,9 @@ def get_spark_session():
             .set('spark.sql.catalog.nessie.s3.endpoint', AWS_S3_ENDPOINT)
             .set('spark.sql.catalog.nessie.s3.region', AWS_REGION)
             .set('spark.sql.catalog.nessie.s3.path-style-access', 'true')
+            .set('spark.sql.catalog.nessie.client.region', AWS_REGION)
+            .set('spark.sql.catalog.nessie.s3.access-key-id', AWS_ACCESS_KEY)
+            .set('spark.sql.catalog.nessie.s3.secret-access-key', AWS_SECRET_KEY)
             .set('spark.hadoop.fs.s3a.access.key', AWS_ACCESS_KEY)
             .set('spark.hadoop.fs.s3a.secret.key', AWS_SECRET_KEY)
             .set('spark.hadoop.fs.s3a.endpoint', AWS_S3_ENDPOINT)
@@ -67,10 +70,11 @@ def run_gen():
     spark = get_spark_session()
     
     try:
-        print("📖 Step 1: Extracting unique customer IDs from Bronze Orders...")
-        # Get unique user_ids from orders_bronze (pointing to bronze branch)
-        unique_users = spark.table("nessie.ecommerce.`orders_bronze@bronze`") \
-            .select(F.col("user_id").alias("customer_id")) \
+        print("📖 Step 1: Extracting unique customer IDs from Silver Orders...")
+        # Get unique user_ids from orders_silver (pointing to silver branch)
+        # Using silver is faster because it's already deduplicated and clustered
+        unique_users = spark.table("nessie.ecommerce.`orders_silver@silver`") \
+            .select(F.col("customer_id")) \
             .filter(F.col("customer_id").isNotNull()) \
             .distinct()
         
