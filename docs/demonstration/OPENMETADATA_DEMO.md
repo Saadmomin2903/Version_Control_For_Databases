@@ -31,7 +31,7 @@ In our project, we use a **Pull-Based Ingestion** architecture. Using the "Push"
 ## 🚀 2. Demo Walkthrough Script
 
 **URL:** `http://140.238.224.207:8585`
-**Login:** `admin@openmetadata.org` / `admin`
+**Login:** `admin` / `admin` (Version 1.3.1)
 
 ### Part A: The "Google for Metadata" (Discovery)
 *Goal: Show how easy it is to find data without asking colleagues.*

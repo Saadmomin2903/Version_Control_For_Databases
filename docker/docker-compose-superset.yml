@@ -26,10 +26,10 @@ services:
     environment:
       - SUPERSET_SECRET_KEY=antigravity_secret_1234
       - SQLALCHEMY_DATABASE_URI=postgresql://superset:superset_password@db:5432/superset
-      - SUPERSET_WEBSERVER_TIMEOUT=300
-      - SUPERSET_TIMEOUT=300
-      - SQLLAB_TIMEOUT=300
-      - GUNICORN_TIMEOUT=300
+      - SUPERSET_WEBSERVER_TIMEOUT=3600
+      - SUPERSET_TIMEOUT=3600
+      - SQLLAB_TIMEOUT=3600
+      - GUNICORN_TIMEOUT=3600
       - DATABASE_DBNAME=superset
       - DATABASE_HOST=db
       - DATABASE_PASSWORD=superset_password

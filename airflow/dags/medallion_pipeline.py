@@ -41,7 +41,7 @@ build_bronze = BashOperator(
 # This will FAIL if validation fails, stopping the pipeline (WAP)
 build_silver = BashOperator(
     task_id='build_silver_layer',
-    bash_command='docker exec lakehouse-spark python3 /home/jovyan/scripts/silver/transform_orders_silver.py',
+    bash_command='docker exec lakehouse-spark python3 /home/jovyan/scripts/silver/build_silver_layer.py',
     dag=dag,
 )
 

@@ -102,10 +102,6 @@ JOIN iceberg.ecommerce.clv_predictions_ml v ON c.customer_id = v.customer_id
 ### 3. Product Recommendation Names
 **SQL**:
 ```sql
-WITH product_catalog AS (
-    SELECT DISTINCT product_id, brand, category_code
-    FROM iceberg.ecommerce.orders_silver
-)
 SELECT 
     r.source_product as source_id,
     COALESCE(s.brand || ' (' || s.category_code || ')', 'Unknown ID: ' || CAST(r.source_product AS VARCHAR)) as source_product_name,
@@ -114,8 +110,8 @@ SELECT
     r.confidence,
     r.lift
 FROM iceberg.ecommerce.product_recommendations_ml r
-LEFT JOIN product_catalog s ON r.source_product = s.product_id
-LEFT JOIN product_catalog rec ON r.recommended_product = rec.product_id
+LEFT JOIN iceberg.ecommerce.products_catalog_gold s ON r.source_product = s.product_id
+LEFT JOIN iceberg.ecommerce.products_catalog_gold rec ON r.recommended_product = rec.product_id
 ```
 *Click **Save -> Save Dataset** as `labeled_recommendations`.*
 
