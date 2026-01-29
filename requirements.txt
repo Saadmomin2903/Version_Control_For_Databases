@@ -21,3 +21,7 @@ pytest-cov==4.1.0
 
 # Utilities
 tqdm==4.66.1  # Progress bars
+
+# Visualization
+matplotlib==3.8.2
+seaborn==0.13.0
