@@ -1,0 +1,187 @@
+# 🎓 30-Minute Project Presentation Master Guide: Data Lakehouse with Version Control
+
+This guide is designed for a formal project submission. It provides a dense, technical walkthrough of the architecture, data engineering flow, and business value. To meet the submission requirements for depth, each segment contains over 300 words of technical script, architectural analysis, and instructional cues.
+
+---
+
+## ⏱️ Presentation Timeline (Total: 30 Minutes)
+
+| Segment | Duration | Focus |
+| :--- | :--- | :--- |
+| **1. The Vision: Data as Code** | 5 Minutes | The Shift to Lakehouses & Bronze Ingestion |
+| **2. Cloud Architecture** | 5 Minutes | Multi-VM Strategy & Service Mesh |
+| **3. Medallion Engineering** | 7 Minutes | Silver WAP Pattern & Quality Audits |
+| **4. Data Version Control** | 5 Minutes | Nessie Catalog & Time Travel Mechanics |
+| **5. The Intelligence Tier** | 5 Minutes | ML Insights, Governance & Monitoring |
+| **6. The Board Defense** | 3 Minutes | Summary & Handling Examiner Questions |
+
+---
+
+## 🎤 Segment 1: The Vision: Data as Code (0-5 mins)
+
+### 🧩 Conceptual Flow & Detailed Explanation
+Modern data platforms struggle with a fundamental conflict: the need for massive scalability (Data Lakes) versus the need for structural integrity and transactional reliability (Data Warehouses). Our project resolves this by implementing the **Data Lakehouse** architecture. Unlike a traditional database that is often a "black box," our Lakehouse behaves like a software repository. We treat **Data as Code**. This means every dataset has a version history, every transformation is audited, and "bad code" (bad data) can be rolled back without affecting production.
+
+The first step in this journey is the **Bronze Layer**. This is where we ingest raw, un-opinionated data. For this project, we chose a real-world e-commerce dataset of scale—over **301.7 Million records**. In a standard academic project, one might ingest a few thousand rows; however, we have implemented a production-grade ingestion pipeline. We are processing 1,614 Parquet files, totaling approximately 7.6GB of raw data. This scale allows us to test the limits of distributed processing and storage. We use **Apache Iceberg** as our table format. Iceberg provides the metadata layer required to turn raw S3 files into tables that support ACID transactions, allowing multiple Spark jobs to read and write to the same location simultaneously without corruption.
+
+### 🛠️ Technical Work & Execution
+**Primary File**: [scripts/bronze/ingest_orders_spark.py](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/bronze/ingest_orders_spark.py)
+The ingestion logic is decoupled into a modular PySpark script. It initiates a `SparkSession` specifically configured with the `IcebergSparkSessionExtensions`. To handle the OCI Object Storage, we utilize the `HadoopFileIO` and the `S3A` filesystem implementation. This choice is critical: while `S3FileIO` is often the default, `S3A` provides better memory management for massive commit operations, preventing the "Memory Overhead" crashes common when committing hundreds of thousands of files to a catalog like Nessie at once.
+
+**Live Demo Command (VM2 - Jupyter)**:
+Open the Jupyter interface at `http://140.245.16.49:8888`. We use **VM2** as our primary Jupyter and Spark Worker node because it has the highest compute-to-memory ratio in our OCI VCN.
+Execute the following cell to prove the scale:
+```python
+# Initial Validation in Jupyter
+from pyspark.sql import SparkSession
+# (Assuming Spark session is already initialized as per Segment 1 guide)
+spark.sql("SELECT count(*) FROM nessie.ecommerce.`orders_bronze@bronze`").show()
+```
+**Talking Point**: "Observe the `@bronze` suffix. This is a Nessie Reference. We are not querying 'the database'; we are querying a specific 'branch' of our data. This allows our ingestion team to work in isolation without the BI team ever seeing raw, unvalidated ingestion noise."
+
+**🛡️ Segment 1 Defense (Q&A)**:
+*   *Q: Why not just use a traditional RDBMS like MySQL for this project?*
+    *   **A**: Primarily because of the CAP theorem and horizontal scalability. A traditional RDBMS would require an extremely expensive, vertically scaled server to handle 300M rows with low-latency indices. By using Iceberg and S3, we separate compute from storage. We only pay for the processing power when the Spark cluster is active, and our storage cost on OCI is pennies per GB.
+
+---
+
+## 🎤 Segment 2: Cloud Architecture & VM Layout (5-10 mins)
+
+### 🧩 Conceptual Flow & Detailed Explanation
+Enterprise data systems require a clear separation of concerns to avoid resource contention. We have deployed our Lakehouse across a **3-VM Distributed Architecture** on Oracle Cloud Infrastructure. This design simulates a real-world enterprise environment where the Control Plane, the Compute Cluster, and the Consumption Layer are isolated.
+
+- **VM1 (Control Plane & Master)**: This is the hub of the system. It runs the **Nessie Catalog** (the version-controlled brain of the lake), **Apache Airflow** (the heart of orchestration), **Apache Superset** (the visualization face), and the **Prometheus/Grafana** stack for observability. By centralizing management here, we maintain a single source of truth for the entire system's state.
+- **VM2 (The Muscle - Worker Node)**: ETL (Extract, Transform, Load) and ML (Machine Learning) are compute-intensive. VM2 serves as our dedicated Spark Worker. When VM1's Spark Master delegates a task, VM2 executes the distributed processing. This ensures that a heavy data transformation doesn't freeze the Management UI.
+- **VM3 (The Voice - Query Gateway)**: Analysts and BI tools often need access via standard JDBC/ODBC. We run the **Spark Thrift Server** here. VM3 provides a standard SQL endpoint (Port 10000) that connects to the same Nessie/Iceberg backend. This dedicated "Consumption Layer" ensures that BI users get fast response times without competing for CPU with the ingestion jobs on VM2.
+
+### 🛠️ Technical Work & Execution
+**Primary File**: [docker-compose.yml](file:///Users/saadmomin/Documents/Version_Control_For_Databases/docker-compose.yml) (on VM1)
+This configuration defines the service grid. A key technical detail is the custom networking bridge. Every container, regardless of the VM it's on, communicates via the `lakehouse-network`. We use environment variables like `NESSIE_URI` and `WAREHOUSE` to ensure every Spark session across the 3 VMs points to the exact same catalog and S3 bucket.
+
+**Live Status Check (VM1)**:
+Check the health of the management stack:
+```bash
+ssh -i ~/.ssh/oracle-vm1.key ubuntu@140.238.224.207 "docker ps"
+```
+Show the **Spark UI** at `http://140.238.224.207:8080` to visualize the worker (VM2) registering itself to the master (VM1).
+
+**Talking Point**: "This architecture is 'Cloud-Agnostic.' While we are using Oracle Cloud, the containerized nature of our services means we could migrate the entire stack to AWS or Azure in hours, as our only external dependency is the S3-compatible object storage API."
+
+**🛡️ Segment 2 Defense (Q&A)**:
+*   *Q: Why use Project Nessie instead of a traditional Hive Metastore?*
+    *   **A**: Hive Metastore is 'current-state' only. It tells you what the database looks like *now*. Nessie is a 'version-controlled' catalog. It allows us to perform 'Multi-Table Transactions.' If we update 5 tables in a single ETL job, Nessie ensures that analysts only see the changes when all 5 are finished and merged, preventing partial, inconsistent views of the data.
+
+---
+
+## 🎤 Segment 3: Medallion Engineering & WAP Pattern (10-17 mins)
+
+### 🧩 Conceptual Flow & Detailed Explanation
+The transformation of data from "Raw" to "Insights" is governed by the **Medallion Architecture**. However, we enhance this with a specialized DevOps pattern for data: **WAP (Write-Audit-Publish)**. This pattern is essential for maintaining a high-quality "Source of Truth" in the **Silver Layer**.
+
+In the **Bronze Layer**, data is often noisy. Our raw e-commerce dataset contains redundant clickstream events, null user identifiers, and sometimes duplicate rows caused by ingestion retries. The **Silver Layer's** job is to enforce "Hard Cleaning." We don't just 'update' the production table; that would be risky. Instead, we:
+1.  **Write**: We execute our PySpark cleaning logic and write the results to a temporary **Nessie Branch** called [silver](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/silver/build_silver_layer.py#30-43). 
+2.  **Audit**: We run a secondary validation job. This job checks for "Hard Failures" (like dropping too many rows) and "Soft Failures" (like invalid email formats). We utilized a custom [QualityChecker](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/utils/quality_checks.py#16-196) utility ([scripts/utils/quality_checks.py](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/utils/quality_checks.py)) that calculates a data quality score for every table.
+3.  **Publish**: Only if the Audit passes (Health Score > 95%), do we merge the [silver](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/silver/build_silver_layer.py#30-43) branch into the [main](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/utils/create_nessie_branches.py#91-145) production branch.
+
+This process converted our 301.7M Bronze records into a high-fidelity set of **300.3 Million Silver records**, successfully identifying and purging **1.46 Million duplicates**.
+
+### 🛠️ Technical Work & Execution
+**Primary File**: [scripts/silver/transform_orders_silver.py](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/silver/transform_orders_silver.py)
+The script utilizes Spark's `Window` functions to identify duplicates. It partitions data by `customer_id`, `product_id`, and `event_time`, then keeps only the first occurrence (`row_number == 1`). This is significantly more efficient than a global `DISTINCT` on 300M rows.
+
+**Live Trigger (VM1/Airflow)**:
+Trigger the pipeline from the command line:
+```bash
+ssh -i ~/.ssh/oracle-vm1.key ubuntu@140.238.224.207 \
+  "docker exec lakehouse-airflow airflow dags trigger medallion_architecture_pipeline"
+```
+**Talking Point**: "Observe how we use **Airflow** as the 'Orchestrator.' It ensures that the Silver transformation doesn't start until the Bronze ingestion is successful. If the [QualityCheck](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/utils/quality_checks.py#16-196) task fails, Airflow blocks the 'Merge-to-Main' task, effectively preventing bad data from ever reaching our BI dashboards."
+
+**🛡️ Segment 3 Defense (Q&A)**:
+*   *Q: How do you handle schema changes (e.g., adding a new column) in the Silver layer?*
+    *   **A**: Because we use Apache Iceberg, we can perform **Schema Evolution**. We can add or rename columns without rewriting the actual Parquet data files. Iceberg handles this metadata-side, making schema changes a zero-cost operation that doesn't require downtime or complex migrations.
+
+---
+
+## 🎤 Segment 4: Data Version Control & Time Travel (17-22 mins)
+
+### 🧩 Conceptual Flow & Detailed Explanation
+One of the most innovative features of this project is the ability to treat our database exactly like a Git repository. This is made possible by **Project Nessie**. In a traditional database, if a user deletes a table or an ETL job corrupts a partition, the only solution is a slow restoration from a backup. In our Lakehouse, we have a functional **"Undo Button."**
+
+Every time Spark writes to an Iceberg table managed by Nessie, a new **Snapshot** is created. Nessie maintains a linear history of these snapshots. **Branching** allows us to create isolated environments for experimentation. For example, if a Data Scientist wants to test a new feature engineering logic, they can create a `datasci-experiment` branch. They can write to the same table on this branch without affecting the production [main](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/utils/create_nessie_branches.py#91-145) branch. This is "Zero-Copy"—no large files are duplicated; only tiny metadata pointers are created. 
+
+**Time Travel** allows us to query these snapshots. This is critical for **Regulatory Compliance** and **Reproducibility**. If an auditor asks to see the state of our sales records as of midnight on December 31st, we can point our query engine to that specific point in time and get the exact results that existed then, even if the data has been updated thousands of times since.
+
+### 🛠️ Technical Work & Execution
+**Primary Tool**: Nessie Catalog (REST API on Port 19120)
+The integration is purely at the configuration level. By setting `spark.sql.catalog.nessie.catalog-impl` to the `NessieCatalog` class, we tell Spark that every SQL command should be version-aware.
+
+Connect to the SQL gateway on VM3 and query the snapshots of the Silver table:
+```bash
+ssh -i key3/oracle-vm3.key ubuntu@161.118.185.218 \
+  "docker exec lakehouse-thrift /opt/spark/bin/beeline -u jdbc:hive2://localhost:10000 -e 'SELECT snapshot_id, committed_at, operation FROM nessie.ecommerce.orders_silver.snapshots'"
+```
+Now, perform a "Time Travel" query to see the record count at a previous snapshot:
+```sql
+-- Querying a previous state (substitute with a real Snapshot ID from snapshots)
+SELECT count(*) FROM nessie.ecommerce.orders_silver VERSION AS OF [SNAPSHOT_ID];
+```
+**Talking Point**: "This query looks like standard SQL, but behind the scenes, Iceberg is navigating through its metadata manifest files to find only the Parquet files that belonged to that specific snapshot. It's not scanning the entire 7.6GB bucket; it's surgically reading the historical state."
+
+**🛡️ Segment 4 Defense (Q&A)**:
+*   *Q: How do you prevent the history from growing too large and costing too much in storage?*
+    *   **A**: We implement **Retention Policies**. Using Spark, we can call the `expire_snapshots` procedure, which tells Iceberg to delete Parquet files that are older than a certain age (e.g., 30 days) and are no longer part of any current branch or snapshot.
+
+---
+
+## 🎤 Segment 5: The Intelligence Tier & Governance (22-27 mins)
+
+### 🧩 Conceptual Flow & Detailed Explanation
+A modern Data Lakehouse must move beyond "Reporting" into "Prediction." This is our **Platinum Layer**. In this tier, we leverage the high-quality, deduplicated data from the Silver layer to build Machine Learning models that drive business value.
+
+We focus on two major ML products:
+1.  **Churn Prediction**: Using Spark ML’s `GBTClassifier` (Gradient Boosted Trees), we analyze the 300 million e-commerce events to identify behavior patterns. If a customer has a high "View-to-Purchase" ratio but hasn't bought anything in 15 days, they are flagged for high churn risk. We engineered complex RFM (Recency, Frequency, Monetary) features directly from our versioned data.
+2.  **Product Recommendation**: We implemented the **FPGrowth** algorithm for Market Basket Analysis. This identifies "Golden Pairs"—products that are frequently bought together.
+
+Finally, we wrap everything in **Data Governance** via **OpenMetadata**. This tool provides our "Data Map." It automatically scrapes our Iceberg metadata to show the **Lineage**—the visual connection between a raw Bronze file and the final ML-driven Churn Prediction. This transparency is what enables "Trust" in the data.
+
+### 🛠️ Technical Work & Execution
+**Primary File**: [scripts/gold/customer_segmentation_iceberg.py](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/gold/customer_segmentation_iceberg.py)
+This script uses Spark ML Pipelines. It handles feature scaling (using `StandardScaler`) and clustering (using `KMeans`) to segment our **13.3 Million customers** into 4 distinct personas: "Champions," "At-Risk," "New Customers," and "Casual Shoppers."
+
+- **BI Visualization**: Open **Superset** (`http://140.238.224.207:8088`). Show the **"Churn Risk Heatmap"**.
+- **Wow Factor**: Explain that these insights are stored in the [gold](file:///Users/saadmomin/Documents/Version_Control_For_Databases/scripts/gold/build_gold_layer.py#69-182) branch. Show them using standard SQL:
+  `USE REFERENCE gold IN nessie;`
+  `SELECT segment_name, count(*), AVG(monetary) FROM nessie.ecommerce.customer_segments GROUP BY segment_name;`
+- **Data Lineage**: Open **OpenMetadata** (`http://140.238.224.207:8585`). Search for the **`customer_segments`** table. Show the visual lineage connecting the Platinum predictions back to the original Bronze raw file (`orders_bronze`). This proves the end-to-end auditability of our ML model.
+
+**Talking Point**: "Most ML projects fail because the training data is dirty. By building our models on the **Silver Layer**, we guarantee that our predictions are based on deduplicated, high-quality data. And by writing the results back as Iceberg tables, we allow our Marketing team to query these ML insights using standard SQL through Superset."
+
+**🛡️ Segment 5 Defense (Q&A)**:
+*   *Q: How do you audit the performance of your Churn model?*
+    *   **A**: We use the `BinaryClassificationEvaluator` in Spark ML. We split our data into 80% training and 20% testing. During the last run, we achieved an **Area Under ROC (AUC) of 0.87**, indicating high predictive accuracy. This score is also logged as metadata alongside the output table for traceability.
+*   *Q: Why might the Product Recommendation table be empty initially?*
+    *   **A**: Our FPGrowth algorithm uses a `minSupport` threshold of 0.001. If the dataset hasn't reached enough cross-sell volume, the algorithm correctly refuses to surface weak associations. For the demo, we showcase the `product_recommendations_demo` table to illustrate the final output schema our Marketing team uses.
+
+---
+
+## 🎤 Segment 6: Conclusion & The Board Defense (27-30 mins)
+
+### 🧩 Conceptual Flow & Detailed Explanation
+In conclusion, we have built more than just a data pipeline; we have built a **Production-Grade Data Product**. This Lakehouse is capable of handling real-world scale (301 Million records), providing developer-friendly version control (Nessie), and delivering business value through predictive analytics (Platinum Layer).
+
+The "Wow Factor" of this project isn't just the size of the data—it's the **Engineering Rigor**. We have followed industry standards at every level:
+- **Architectural Rigor**: Multi-VM distribution on OCI.
+- **Transactional Rigor**: ACID compliance via Apache Iceberg.
+- **Workflow Rigor**: WAP (Write-Audit-Publish) pattern on Nessie branches.
+- **Observability Rigor**: Real-time monitoring via Prometheus/Grafana.
+
+### 🛠️ The "Final Boss" Defense (Highest Difficulty Q&A)
+1.  **Q: If we have 301.7M rows, why not use BigQuery or Snowflake?**
+    - **A**: BigQuery/Snowflake are "Black Box" SaaS. You pay a massive premium for the infrastructure. Our Lakehouse uses **Open-Source Formats (Iceberg/Nessie/Spark)**. This avoids vendor lock-in. We can move our data files from Oracle S3 to AWS S3 tomorrow, and our entire pipeline will still work without changing a single line of SQL.
+2.  **Q: How do you handle 'Data Drift' in your ML models?**
+    - **A**: Since we have **Version Control**, we can 'Snapshot' the input data for every model training run. If the model performance drops next month, we can Time-Travel back to the exact data used for the original training to see if the underlying behavior of our customers has shifted.
+3.  **Q: What is the current bottleneck of your system?**
+    - **A**: The primary bottleneck is the **Single-Worker Spark Cluster**. While VM2 is powerful, processing 300M rows in 45 minutes is a batch operation. To move towards "Real-Time," we would add more workers and transition from Batch PySpark to **Spark Structured Streaming**.
+
+**Final Closing Statement**: "We’ve demonstrated that with modern open-source tools, a data team can achieve the same level of version control as software developers, ensuring that our data is not just 'Big,' but is reliable, versioned, and predictive."

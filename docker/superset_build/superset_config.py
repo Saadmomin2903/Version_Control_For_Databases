@@ -25,8 +25,13 @@ MAPBOX_API_KEY = os.getenv("MAPBOX_API_KEY", "")
 
 # Feature flags
 FEATURE_FLAGS = {
-    "DYNAMIC_PLUGINS": True,
+    "DYNAMIC_PLUGINS": False,  # Disabled - causes 404 errors without proper setup
     "ALERT_REPORTS": True,
+    # Performance Optimizations (Fix for GitHub #29636 - slow loading)
+    "DASHBOARD_VIRTUALIZATION": True,  # Only render visible charts
+    "DASHBOARD_NATIVE_FILTERS": True,  # Use native filter bar
+    "DASHBOARD_CROSS_FILTERS": True,   # Enable cross-filtering
+    "ENABLE_TEMPLATE_PROCESSING": True,
 }
 
 # The image uses Gunicorn by default
